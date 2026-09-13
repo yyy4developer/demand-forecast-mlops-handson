@@ -1,0 +1,370 @@
+{
+  "datasets": [
+    {
+      "name": "ds_demand",
+      "displayName": "月次出荷実績",
+      "queryLines": [
+        "SELECT ",
+        "  s.ym, ",
+        "  s.channel, ",
+        "  i.item_code, ",
+        "  i.item_name, ",
+        "  i.item_category, ",
+        "  i.item_type, ",
+        "  i.demand_class, ",
+        "  i.is_domestic_only, ",
+        "  s.qty, ",
+        "  s.amount ",
+        "FROM fct_shipments s ",
+        "JOIN dim_item i ON i.item_code = s.item_code "
+      ]
+    },
+    {
+      "name": "ds_accuracy",
+      "displayName": "予測精度",
+      "queryLines": [
+        "SELECT ",
+        "  a.target_ym, ",
+        "  a.model_name, ",
+        "  i.item_code, ",
+        "  i.item_category, ",
+        "  i.demand_class, ",
+        "  a.actual_qty, ",
+        "  a.forecast_qty, ",
+        "  a.abs_error, ",
+        "  a.ape, ",
+        "  a.within_interval ",
+        "FROM fct_forecast_accuracy a ",
+        "JOIN dim_item i ON i.item_code = a.item_code "
+      ]
+    },
+    {
+      "name": "ds_inventory",
+      "displayName": "在庫と欠品",
+      "queryLines": [
+        "SELECT ",
+        "  v.ym, ",
+        "  v.site_code, ",
+        "  i.item_code, ",
+        "  i.item_name, ",
+        "  i.item_category, ",
+        "  v.closing_qty, ",
+        "  v.safety_stock_qty, ",
+        "  v.surplus_qty, ",
+        "  v.stockout_flag ",
+        "FROM fct_inventory v ",
+        "JOIN dim_item i ON i.item_code = v.item_code ",
+        "WHERE v.safety_stock_qty > 0 "
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "需要と予測の概況",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "title",
+            "textbox_spec": "# 需要予測 概況ダッシュボード（見本）"
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "subtitle",
+            "textbox_spec": "アクアテック工業の月次出荷実績と、前年同月ナイーブ予測の当たり具合。**これは完成見本です** — 同じものをご自身のスキーマで作っていただきます。"
+          },
+          "position": {"x": 0, "y": 1, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi-qty",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_demand",
+                "fields": [
+                  {"name": "sum(qty)", "expression": "SUM(`qty`)"},
+                  {"name": "monthly(ym)", "expression": "DATE_TRUNC(\"MONTH\", `ym`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(qty)",
+                  "displayName": "出荷数量 合計",
+                  "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}
+                },
+                "period": {"fieldName": "monthly(ym)"}
+              },
+              "frame": {"showTitle": true, "title": "出荷数量（個）"}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-amount",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_demand",
+                "fields": [
+                  {"name": "sum(amount)", "expression": "SUM(`amount`)"},
+                  {"name": "monthly(ym)", "expression": "DATE_TRUNC(\"MONTH\", `ym`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(amount)",
+                  "displayName": "出荷金額 合計",
+                  "format": {"type": "number-currency", "currencyCode": "JPY", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 2}}
+                },
+                "period": {"fieldName": "monthly(ym)"}
+              },
+              "frame": {"showTitle": true, "title": "出荷金額（円）"}
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-error",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_accuracy",
+                "fields": [
+                  {"name": "avg(abs_error)", "expression": "AVG(`abs_error`)"},
+                  {"name": "monthly(target_ym)", "expression": "DATE_TRUNC(\"MONTH\", `target_ym`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(abs_error)",
+                  "displayName": "平均誤差（個数）",
+                  "format": {"type": "number", "decimalPlaces": {"type": "max", "places": 1}}
+                },
+                "period": {"fieldName": "monthly(target_ym)"}
+              },
+              "frame": {"showTitle": true, "title": "予測の平均誤差（個）"}
+            }
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {"name": "sec-trend", "textbox_spec": "## 需要の推移"},
+          "position": {"x": 0, "y": 5, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "trend-by-channel",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_demand",
+                "fields": [
+                  {"name": "monthly(ym)", "expression": "DATE_TRUNC(\"MONTH\", `ym`)"},
+                  {"name": "sum(qty)", "expression": "SUM(`qty`)"},
+                  {"name": "channel", "expression": "`channel`"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "monthly(ym)", "displayName": "年月", "scale": {"type": "temporal"}},
+                "y": {"fieldName": "sum(qty)", "displayName": "出荷数量", "scale": {"type": "quantitative"}},
+                "color": {"fieldName": "channel", "displayName": "チャネル", "scale": {"type": "categorical"}}
+              },
+              "frame": {"showTitle": true, "title": "月次出荷数量の推移（国内 / 海外）"}
+            }
+          },
+          "position": {"x": 0, "y": 6, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "qty-by-category",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_demand",
+                "fields": [
+                  {"name": "item_category", "expression": "`item_category`"},
+                  {"name": "sum(qty)", "expression": "SUM(`qty`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "sum(qty)", "displayName": "出荷数量", "scale": {"type": "quantitative"}},
+                "y": {"fieldName": "item_category", "displayName": "品目カテゴリ", "scale": {"type": "categorical", "sort": {"by": "value"}}}
+              },
+              "frame": {"showTitle": true, "title": "品目カテゴリ別の出荷数量"}
+            }
+          },
+          "position": {"x": 6, "y": 6, "width": 6, "height": 6}
+        },
+        {
+          "widget": {"name": "sec-acc", "textbox_spec": "## 予測は当たっているのか\n\n⚠️ **率で見るか個数で見るかで、優先順位が入れ替わります。** 下の 2 つのグラフを見比べてください。"},
+          "position": {"x": 0, "y": 12, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "err-rate-by-class",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_accuracy",
+                "fields": [
+                  {"name": "demand_class", "expression": "`demand_class`"},
+                  {"name": "avg(ape)", "expression": "AVG(`ape`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "demand_class", "displayName": "需要分類", "scale": {"type": "categorical", "sort": {"by": "value"}}},
+                "y": {"fieldName": "avg(ape)", "displayName": "平均誤差率", "scale": {"type": "quantitative"}, "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}}
+              },
+              "frame": {"showTitle": true, "title": "需要分類ごとの平均誤差【率】"}
+            }
+          },
+          "position": {"x": 0, "y": 14, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "err-qty-by-class",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_accuracy",
+                "fields": [
+                  {"name": "demand_class", "expression": "`demand_class`"},
+                  {"name": "avg(abs_error)", "expression": "AVG(`abs_error`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "demand_class", "displayName": "需要分類", "scale": {"type": "categorical", "sort": {"by": "value"}}},
+                "y": {"fieldName": "avg(abs_error)", "displayName": "平均誤差（個）", "scale": {"type": "quantitative"}}
+              },
+              "frame": {"showTitle": true, "title": "需要分類ごとの平均誤差【個数】"}
+            }
+          },
+          "position": {"x": 6, "y": 14, "width": 6, "height": 6}
+        },
+        {
+          "widget": {"name": "sec-inv", "textbox_spec": "## 在庫の健全性"},
+          "position": {"x": 0, "y": 20, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "stock-by-site",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_inventory",
+                "fields": [
+                  {"name": "site_code", "expression": "`site_code`"},
+                  {"name": "avg(closing_qty)", "expression": "AVG(`closing_qty`)"},
+                  {"name": "avg(safety_stock_qty)", "expression": "AVG(`safety_stock_qty`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "site_code", "displayName": "拠点", "scale": {"type": "categorical"}},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "fields": [
+                    {"fieldName": "avg(closing_qty)", "displayName": "月末在庫"},
+                    {"fieldName": "avg(safety_stock_qty)", "displayName": "安全在庫"}
+                  ]
+                }
+              },
+              "mark": {"layout": "group"},
+              "frame": {"showTitle": true, "title": "拠点別の月末在庫と安全在庫（平均）"}
+            }
+          },
+          "position": {"x": 0, "y": 21, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "stockout-table",
+            "queries": [{
+              "name": "main_query",
+              "query": {
+                "datasetName": "ds_inventory",
+                "fields": [
+                  {"name": "item_code", "expression": "`item_code`"},
+                  {"name": "item_name", "expression": "`item_name`"},
+                  {"name": "site_code", "expression": "`site_code`"},
+                  {"name": "sum(stockout_flag)", "expression": "SUM(`stockout_flag`)"}
+                ],
+                "disaggregated": false
+              }
+            }],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {"fieldName": "item_code", "displayName": "品目コード"},
+                  {"fieldName": "item_name", "displayName": "品目名"},
+                  {"fieldName": "site_code", "displayName": "拠点"},
+                  {"fieldName": "sum(stockout_flag)", "displayName": "欠品が起きた月数"}
+                ]
+              },
+              "frame": {"showTitle": true, "title": "欠品が起きている品目"}
+            }
+          },
+          "position": {"x": 6, "y": 21, "width": 6, "height": 6}
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {"light": "#FCFCFC", "dark": "#1F272D"},
+      "widgetBackgroundColor": {"light": "#FFFFFF", "dark": "#11171C"},
+      "fontColor": {"light": "#11171C", "dark": "#E8ECF0"},
+      "selectionColor": {"light": "#2272B4", "dark": "#8ACAFF"},
+      "visualizationColors": ["#094074", "#3C6997", "#5ADBFF", "#FFDD4A", "#FE9000", "#B75D69", "#99DDB4"],
+      "widgetHeaderAlignment": "LEFT",
+      "widgetCornerRadius": 8
+    }
+  }
+}

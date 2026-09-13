@@ -40,7 +40,11 @@ variables:
     description: "参加者グループ名 (権限付与の対象)"
     default: handson-participants
   warehouse_id:
-    description: "ダッシュボード / Genie Agent が使う SQL ウェアハウス ID"
+    # ⚠️ 環境ごとに異なるため既定値は空にしています。
+    #    デプロイ時に渡してください:
+    #      databricks bundle deploy -t dev -p <profile> --var warehouse_id=<id>
+    #    ID は `databricks warehouses list` で確認できます。
+    description: "ダッシュボードが使う SQL ウェアハウス ID"
     default: ""
 
 include:
