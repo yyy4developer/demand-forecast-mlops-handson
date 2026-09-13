@@ -9,6 +9,9 @@
 #   3. ノートブックの実行出力 — 実データが残っている可能性がある
 #   4. サンプルデータの再現性 — 生成物が仕様と一致しているか
 #
+# ⚠️ `.databricks/` は bundle が作る作業ディレクトリで、ワークスペースの URL を
+#    含みます。git 管理外（.gitignore 済み）なので検査対象から外しています。
+#
 # ⚠️ 案件固有の語句（組織名・個人名・実在する製品型番など）の検査は、
 #    その語句自体をこのファイルに書くと公開時に漏れてしまうため、ここには含めない。
 #    リポジトリ外の非公開スクリプトで別途チェックすること。
@@ -20,7 +23,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
 FAIL=0
-EXCLUDES=(--exclude-dir=.git --exclude-dir=.venv --exclude-dir=.uv --exclude-dir=node_modules)
+EXCLUDES=(--exclude-dir=.git --exclude-dir=.venv --exclude-dir=.uv --exclude-dir=node_modules --exclude-dir=.databricks)
 
 check() {
   local label="$1" pattern="$2"

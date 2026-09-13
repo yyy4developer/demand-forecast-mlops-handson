@@ -49,7 +49,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0"
+# MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0" matplotlib
 
 # COMMAND ----------
 

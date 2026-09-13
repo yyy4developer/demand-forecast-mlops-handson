@@ -10,7 +10,7 @@ Databricks の **ダッシュボード / Genie Agent / MLflow / Unity Catalog / 
 |---|---|
 | **対象** | 業務データの分析に関心のある方。Databricks の経験は不問 |
 | **所要** | 約 3 時間（説明 40 分 + ハンズオン 105 分 + 自由時間 30 分） |
-| **前提** | Unity Catalog が有効な Databricks ワークスペース + Serverless SQL ウェアハウス |
+| **前提** | Unity Catalog が有効な Databricks ワークスペース + **Pro または Serverless** の SQL ウェアハウス |
 | **進め方** | ノートブックを上から順に実行 + 画面操作（UI）を組み合わせる |
 | **複数人** | スキーマが**参加者ごとに自動で分かれる**ので、同じワークスペースで同時に実施できる |
 
@@ -18,7 +18,7 @@ Databricks の **ダッシュボード / Genie Agent / MLflow / Unity Catalog / 
 
 ```
    CSV ──▶ bronze ──▶ silver ──▶ gold ──┬──▶ ① ダッシュボード（AI/BI）
-        （事前構築済み・仕組みだけ紹介）      │
+   （共有）  （参加者ごとに自分で作る）        │
                                           ├──▶ ② Genie Agent（自然言語で聞く）
                                           │
                                           ├──▶ ③ ai_forecast（SQL 1 文で予測）
@@ -32,7 +32,7 @@ Databricks の **ダッシュボード / Genie Agent / MLflow / Unity Catalog / 
 
 | # | ノートブック | 内容 |
 |---|---|---|
-| 0 | `00_gold_tables_walkthrough` | 事前構築済みテーブルの成り立ちを読む（実行なし） |
+| 0 | ⭐ `00_setup_my_pipeline` | **自分の作業場所とパイプラインを作り、CSV を取り込む** |
 | 1 | `01_dashboard` | AI/BI ダッシュボードを作る + Genie Code で作らせる + スケジュール配信 |
 | 2 | `02_genie_agent` | Genie Agent を作って自然言語で質問する |
 | 3 | `03_ai_forecast` | `ai_forecast()` で SQL 1 文だけで 18 ヶ月先を予測する |
@@ -45,8 +45,9 @@ Databricks の **ダッシュボード / Genie Agent / MLflow / Unity Catalog / 
 
 ## サンプルデータ
 
-23 品目 × 2 チャネル（国内 / 海外）の月次出荷実績を **2020-01 〜 2026-08 の 80 ヶ月分**（39 系列）
-持っています。品目マスタ・在庫・リードタイム・ベースライン予測も付属します。
+23 品目 × 2 チャネル（国内 / 海外）の月次出荷実績を **2020-01 〜 2026-08 の 80 ヶ月分**持っています。
+**系列数は 39** — 国内専用の 7 品目には海外の出荷がないためです。
+品目マスタ・在庫・リードタイム・ベースライン予測も付属します。
 
 ⭐ **品目ごとに需要の性質が意図的に作り分けられている**のがポイントです。
 
@@ -75,6 +76,29 @@ git diff --stat data/          # 差分が出なければ再現できている
 目標値（需要分類 / ADI / CV²/ 平均数量）と実測値の対比は
 [`data/_generation_report.csv`](./data/_generation_report.csv) で確認できます。
 
+## スキーマ構成
+
+| スキーマ | 中身 | 誰が書くか |
+|---|---|---|
+| `fc_shared` | CSV を置く Volume だけ | 管理者 |
+| `fc_sample` | 完成見本の gold | 管理者 |
+| ⭐ `fc_ws_<user>` | **各参加者の bronze → silver → gold 以降すべて** | ⭐ 参加者自身 |
+
+⭐ 本来のデータ基盤なら bronze → silver → gold は**共通スキーマに 1 セット**作ります。
+今回は「取り込みから自分の手で体験する」ことを目的に、参加者ごとに一式を作る構成にしています。
+⚠️ この点はノートブックの冒頭でも明示しています（本番でこの形にする必要はありません）。
+
+## ⚠️ 環境の注意点（実機検証で判明）
+
+| # | 注意点 |
+|---|---|
+| 1 | ⚠️⚠️ **サーバーレスの既定環境バージョンは 1**（Python 3.10）で `mlflow` が入っていません。ML 系ノートブックは先頭で `environment_version = "5"` を宣言しています |
+| 2 | ⚠️ **`ai_forecast` はノートブックの計算資源では動きません。** Pro / Serverless の SQL ウェアハウスが必要です（ノートブックが自動でそちらに投げます） |
+| 3 | ⚠️ **マテリアライズドビューには列コメントも主キーも付けられません。** 列の意味と結合条件はメトリクスビューの定義に持たせています |
+| 4 | ⚠️ **メトリクスビューは 1 本にファクト 1 つ**なので、需要用と予測精度用の 2 本に分けています |
+| 5 | ⚠️ **日本語の識別子はバッククォートが必須**です（`` `品目カテゴリ` ``） |
+| 6 | ⚠️ 作りたてのパイプラインは 1 回目の実行が失敗することがあります。ノートブックが自動で 3 回まで再試行します |
+
 ## 管理者向け — 事前準備
 
 ⭐ **参加者手順（`HANDSON.md`）とは完全に分かれています。** 手順は [docs/SETUP.md](./docs/SETUP.md) へ。
@@ -88,13 +112,14 @@ databricks bundle deploy   -t dev -p <profile>
 
 | 作られるもの | リソース |
 |---|---|
-| カタログ / 共有スキーマ | `resources/catalog_schema.yml` |
+| 共有スキーマ / 見本用スキーマ | `resources/catalog_schema.yml` |
 | CSV 投入先の Volume | `resources/volumes.yml` |
 | サンプルデータ投入ジョブ | `resources/job_setup.yml` |
-| bronze → silver → gold パイプライン | `resources/pipeline_medallion.yml` |
-| 完成見本のダッシュボード | `resources/dashboard_sample.yml` |
-| 完成見本の Genie Agent | `resources/genie_sample.yml` |
-| バッチ推論 / 再学習ジョブの見本 | `resources/jobs_mlops.yml` |
+| 見本用の bronze → silver → gold パイプライン | `resources/pipeline_medallion.yml` |
+
+⚠️ **カタログはこの bundle では作りません。** Default Storage 構成のメタストアでは
+API 経由の `CREATE CATALOG` が失敗するため、`notebooks/admin/00_prepare_environment` で
+SQL から作成します。⭐ `bundle deploy` の**前**に実行してください。
 
 ⚠️ ワークスペースの URL は **プロファイルから解決される**ため `databricks.yml` には書いていません。
 別のワークスペースで使う場合は `databricks auth login` でプロファイルを作り、`-p` を差し替えてください。

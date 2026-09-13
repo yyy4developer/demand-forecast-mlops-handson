@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # 03 — SQL 1 文で予測する（`ai_forecast`）
 # MAGIC
@@ -34,6 +38,14 @@
 # MAGIC
 # MAGIC ⭐ **「1 回試す」なら十分。でも「毎月回して改善し続ける」には足りない。**
 # MAGIC その足りない部分を埋めるのが次のパート（MLflow / Unity Catalog / Jobs）です。
+
+# COMMAND ----------
+
+# MAGIC %pip install -q matplotlib
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -186,6 +198,94 @@ print(f"✅ {MY}.fct_forecast_ai に {n:,} 行の予測を書き出しました"
 # MAGIC JOIN dim_item i USING (item_code)
 # MAGIC GROUP BY i.demand_class
 # MAGIC ORDER BY `width_per_forecast` DESC
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ⭐ 1 品目を選んでグラフで見る
+# MAGIC
+# MAGIC 表の数字だけだと予測の形が掴めないので、**実績と予測を重ねて**見ます。
+# MAGIC ⭐ 点線が予測、薄い帯が予測区間です。
+
+# COMMAND ----------
+
+import os
+import sys
+
+_nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(_nb_path), ".."))
+_src = f"/Workspace{REPO_ROOT}/src" if not REPO_ROOT.startswith("/Workspace") else f"{REPO_ROOT}/src"
+if _src not in sys.path:
+    sys.path.insert(0, _src)
+
+from mlops.plots import plot_series_with_forecast  # noqa: E402
+
+# ★ 見たい品目を変えてみてください（出荷数量の多い品目 / 少ない品目で印象が変わります）
+PICK_ITEM, PICK_CHANNEL = "K310", "DOM"
+
+hist = spark.sql(f"""
+    SELECT ym, qty FROM {MY}.fct_shipments
+    WHERE item_code = '{PICK_ITEM}' AND channel = '{PICK_CHANNEL}'
+""").toPandas()
+fc = spark.sql(f"""
+    SELECT target_ym, p50, lower_bound, upper_bound FROM {MY}.fct_forecast_ai
+    WHERE item_code = '{PICK_ITEM}' AND channel = '{PICK_CHANNEL}'
+""").toPandas()
+
+display(plot_series_with_forecast(hist, fc, f"{PICK_ITEM} / {PICK_CHANNEL} — actual and ai_forecast"))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ⚠️ 出ない月がある品目も見てください
+# MAGIC
+# MAGIC ⭐ 下は間欠需要の品目です。**予測区間が数量に対して極端に広い**ことが一目で分かります。
+# MAGIC ⚠️ 「予測値 1 個、区間 0〜5 個」では、発注の判断材料になりません。
+
+# COMMAND ----------
+
+INTERMITTENT_ITEM = spark.sql(f"""
+    SELECT item_code FROM {MY}.dim_item
+    WHERE demand_class IN ('intermittent', 'lumpy', 'lumpy_severe')
+    ORDER BY adi DESC LIMIT 1
+""").collect()[0][0]
+
+hist2 = spark.sql(f"""
+    SELECT ym, qty FROM {MY}.fct_shipments
+    WHERE item_code = '{INTERMITTENT_ITEM}' AND channel = 'DOM'
+""").toPandas()
+fc2 = spark.sql(f"""
+    SELECT target_ym, p50, lower_bound, upper_bound FROM {MY}.fct_forecast_ai
+    WHERE item_code = '{INTERMITTENT_ITEM}' AND channel = 'DOM'
+""").toPandas()
+
+display(plot_series_with_forecast(
+    hist2, fc2, f"{INTERMITTENT_ITEM} / DOM — intermittent demand"))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 需要の性質ごとに「区間の広さ」を比べる
+
+# COMMAND ----------
+
+from mlops.plots import plot_grouped_bars  # noqa: E402
+
+width_df = spark.sql(f"""
+    SELECT i.demand_class AS demand_class,
+           ROUND(AVG(f.p50), 1) AS avg_forecast,
+           ROUND(AVG((f.upper_bound - f.lower_bound) / NULLIF(f.p50, 0)), 2) AS width_ratio
+    FROM {MY}.fct_forecast_ai f
+    JOIN {MY}.dim_item i USING (item_code)
+    GROUP BY i.demand_class
+    ORDER BY width_ratio DESC
+""").toPandas()
+
+display(plot_grouped_bars(
+    width_df, "demand_class", ["width_ratio"],
+    "forecast interval width relative to the forecast (higher = less usable)",
+    ylabel="(upper - lower) / forecast",
+))
 
 # COMMAND ----------
 

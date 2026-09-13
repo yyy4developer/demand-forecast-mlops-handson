@@ -42,7 +42,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0"
+# MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0" matplotlib
 
 # COMMAND ----------
 
@@ -222,6 +222,114 @@ print(f"✅ {MY}.fct_forecast_model に {sdf.count():,} 行を書き出しまし
 # MAGIC FROM joined
 # MAGIC GROUP BY demand_class
 # MAGIC ORDER BY `vs_baseline`
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 5. ⭐ グラフで見る
+# MAGIC
+# MAGIC 表の数字だけだと差が実感しにくいので、**同じ内容をグラフにします**。
+
+# COMMAND ----------
+
+import os
+import sys
+
+_p = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+_root = os.path.normpath(os.path.join(os.path.dirname(_p), ".."))
+_src = f"/Workspace{_root}/src" if not _root.startswith("/Workspace") else f"{_root}/src"
+if _src not in sys.path:
+    sys.path.insert(0, _src)
+
+from mlops.plots import plot_grouped_bars, plot_pred_vs_actual, plot_error_over_time  # noqa: E402
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ① 予測 vs 実績（点が対角線に乗っていれば当たっている）
+# MAGIC
+# MAGIC ⭐ 対角線から**上に外れている点は多く見込みすぎ**、**下は少なく見込みすぎ**です。
+# MAGIC ⚠️ 数量が桁で違うので両軸を対数にしています。
+
+# COMMAND ----------
+
+pva = spark.sql(f"""
+    SELECT a.qty AS actual_qty, m.p50 AS forecast_qty
+    FROM {MY}.fct_forecast_model m
+    JOIN {MY}.fct_shipments a
+      ON a.item_code = m.item_code AND a.channel = m.channel AND a.ym = m.target_ym
+    WHERE a.qty > 0
+""").toPandas()
+
+display(plot_pred_vs_actual(pva, title="model: predicted vs actual"))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ② ⭐⭐ 需要の性質ごとに「モデル」と「去年と同じ」を並べる
+# MAGIC
+# MAGIC ⭐ **棒が低い方が良い**（誤差が小さい）。
+# MAGIC ⚠️ 全体で勝っていても、**性質によっては負けている**ことが見えます。
+
+# COMMAND ----------
+
+cmp_df = spark.sql(f"""
+    WITH both AS (
+      SELECT item_code, channel, target_ym, 'model' AS src, p50 FROM {MY}.fct_forecast_model
+      UNION ALL
+      SELECT item_code, channel, target_ym, 'baseline' AS src, p50 FROM {MY}.fct_forecast_baseline
+    ),
+    j AS (
+      SELECT b.src, i.demand_class, abs(a.qty - b.p50) AS e
+      FROM both b
+      JOIN {MY}.fct_shipments a
+        ON a.item_code = b.item_code AND a.channel = b.channel AND a.ym = b.target_ym
+      JOIN {MY}.dim_item i ON i.item_code = b.item_code
+    )
+    SELECT demand_class,
+           ROUND(AVG(CASE WHEN src = 'model'    THEN e END), 2) AS model,
+           ROUND(AVG(CASE WHEN src = 'baseline' THEN e END), 2) AS baseline
+    FROM j GROUP BY demand_class ORDER BY baseline DESC
+""").toPandas()
+
+display(plot_grouped_bars(
+    cmp_df, "demand_class", ["model", "baseline"],
+    "mean absolute error by demand class (lower is better)",
+    ylabel="mean absolute error (units)",
+))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ③ 月ごとの誤差の推移
+# MAGIC
+# MAGIC ⭐ **ある月だけ大きく外している**ことがないかを確認します。
+# MAGIC ⚠️ 特定の月が飛び抜けている場合、その月に何か業務上の出来事があったはずです。
+
+# COMMAND ----------
+
+trend = spark.sql(f"""
+    WITH both AS (
+      SELECT item_code, channel, target_ym, 'model' AS src, p50 FROM {MY}.fct_forecast_model
+      UNION ALL
+      SELECT item_code, channel, target_ym, 'baseline' AS src, p50 FROM {MY}.fct_forecast_baseline
+    ),
+    j AS (
+      SELECT b.src, b.target_ym, abs(a.qty - b.p50) AS e
+      FROM both b
+      JOIN {MY}.fct_shipments a
+        ON a.item_code = b.item_code AND a.channel = b.channel AND a.ym = b.target_ym
+    )
+    SELECT target_ym,
+           ROUND(AVG(CASE WHEN src = 'model'    THEN e END), 2) AS model,
+           ROUND(AVG(CASE WHEN src = 'baseline' THEN e END), 2) AS baseline
+    FROM j GROUP BY target_ym ORDER BY target_ym
+""").toPandas()
+
+display(plot_error_over_time(
+    trend, "target_ym", {"model": "model", "baseline (last year)": "baseline"},
+    "mean absolute error over time (lower is better)",
+))
 
 # COMMAND ----------
 

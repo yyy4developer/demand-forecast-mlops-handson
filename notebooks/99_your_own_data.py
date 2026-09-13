@@ -95,7 +95,12 @@ else:
 # COMMAND ----------
 
 # ★ 自分のファイル名に書き換えてください
-MY_FILE = files[0] if files else "your_file.csv"
+MY_FILE = files[0] if files else None
+
+if MY_FILE is None:
+    print("⚠️ まだファイルがありません。上の手順で CSV をアップロードしてから、")
+    print("   このセル以降をもう一度実行してください。")
+    dbutils.notebook.exit("no file uploaded yet")
 
 # ★ 日本語が化けたら "Shift_JIS" や "CP932" に変えてください
 ENCODING = "UTF-8"

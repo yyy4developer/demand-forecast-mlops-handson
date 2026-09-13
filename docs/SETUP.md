@@ -11,10 +11,9 @@
 
 - [ ] 参加者全員のアカウントが対象ワークスペースに追加されている
 - [ ] 参加者を 1 つのグループにまとめている（個別付与を避けるため）
-- [ ] Serverless SQL ウェアハウスが起動できる
-- [ ] ⚠️ `ai_forecast()` の前提: **Pro または Serverless** の SQL ウェアハウスがある
-      （Classic では動きません）+ Predictive AI Functions のプレビュー登録
-- [ ] ⚠️ `08_mmf_genie_code` の前提: **DBR 18 for ML 以上**のクラスタが起動できる
+- [ ] ⚠️ **Pro または Serverless の SQL ウェアハウス**がある（`ai_forecast` は Classic では動きません）
+- [ ] ⚠️ 参加者が **サーバーレスコンピュート**を使える
+- [ ] ⚠️ 参加者が **パイプラインを作成できる**（`00_setup_my_pipeline` で各自が自分のパイプラインを作ります）
 
 ## STEP 1 — 認証
 
@@ -22,63 +21,141 @@
 databricks auth login --host <workspace-url> --profile <profile>
 ```
 
-## STEP 2 — bundle をデプロイ
+## STEP 2 — ⚠️ カタログを作る（bundle より先に）
+
+⚠️ **順番を逆にすると失敗します。**
+
+ノートブック `notebooks/admin/00_prepare_environment` を実行してください。
+カタログ作成と参加者への権限付与をまとめて行います。
+
+> ⚠️ **なぜ bundle でカタログを作らないのか**
+>
+> Default Storage 構成のメタストアでは、API 経由の `CREATE CATALOG` が
+> 「storage root がない」と言って失敗します。SQL 経由なら保存先が自動で決まるため通ります。
+
+## STEP 3 — bundle をデプロイ
 
 ```bash
 databricks bundle validate -t dev -p <profile>
 databricks bundle deploy   -t dev -p <profile>
 ```
 
-## STEP 3 — サンプルデータを投入（セット A）
+作られるもの: 共有スキーマ `fc_shared` / 見本用スキーマ `fc_sample` /
+Volume `landing` / データ投入ジョブ / 見本用パイプライン
 
-ジョブ `[handson] 01 サンプルデータを Volume に投入` を `load_set = A` で実行。
+## STEP 4 — サンプルデータを投入（⚠️ セット A だけ）
 
-## STEP 4 — パイプラインを実行
+ジョブ **`[handson] 01 サンプルデータを Volume に投入`** を **`load_set = A`** で実行。
 
-<!-- Phase 2 で追記 -->
+⚠️⚠️ **セット B（`shipments_2026_08.csv`）は当日まで投入しないでください。**
+「新しいデータが届いてテーブルが更新される」を見せるのが当日の山場です。
 
-## STEP 5 — UC メタデータを適用
+## STEP 5 — 見本の gold を作る
 
-⚠️ **ここを飛ばすと Genie Agent の回答精度が出ません。**
+パイプライン **`[handson] 見本 メダリオンパイプライン`** を実行。
+`fc_sample` に gold 7 テーブルができます。
 
-<!-- Phase 2 で追記 -->
+⚠️ サーバーレスの初回起動に **4〜6 分**かかります。
 
-## STEP 6 — 参加者に権限を付与
+## STEP 6 — 見本用のメタデータとメトリクスビュー
 
-参加者が持つ権限は**これだけ**です。
+ノートブック `notebooks/_uc_metadata` を、**`TARGET` を `<catalog>.fc_sample` にして**実行。
 
-```sql
-GRANT USE CATALOG    ON CATALOG <catalog> TO `<participant-group>`;
--- 自分専用のスキーマを作れるようにする
-GRANT CREATE SCHEMA  ON CATALOG <catalog> TO `<participant-group>`;
--- 共有スキーマは読み取りのみ
-GRANT USE SCHEMA     ON SCHEMA  <catalog>.fc_shared TO `<participant-group>`;
-GRANT SELECT         ON SCHEMA  <catalog>.fc_shared TO `<participant-group>`;
--- CSV の投入先 Volume（自由時間で自分のデータを置くため書き込みも許可）
-GRANT READ VOLUME    ON VOLUME  <catalog>.fc_shared.landing TO `<participant-group>`;
-GRANT WRITE VOLUME   ON VOLUME  <catalog>.fc_shared.landing TO `<participant-group>`;
+⚠️ これを飛ばすと、見本 Genie Agent の回答精度が出ません。
+
+## STEP 7 — 見本のダッシュボードと Genie Agent を作る
+
+⚠️ **画面から手で作ります**（自動化できません）。
+
+1. `fc_sample` を参照するダッシュボードを作り、名前に **「見本」** を入れる
+   （`01_dashboard` が名前で探します）
+2. `fc_sample.mv_demand` と `fc_sample.mv_forecast_accuracy` を渡した Genie Agent を作り、
+   名前に **「見本」** を入れる
+3. どちらも参加者グループに **`CAN VIEW`** を付ける
+
+⭐ 作ったあと、リポジトリに取り込んでおくと次回から配布できます。
+
+```bash
+databricks bundle generate dashboard   --existing-path "<見本ダッシュボードのパス>" --key demand_overview
+databricks bundle generate genie-space --key demand_agent
 ```
 
-さらに UI 側で以下を付与します。
+## STEP 8 — MMF のスキルを配置（`08` を触らせる場合）
 
-- [ ] SQL ウェアハウスに `CAN USE`
-- [ ] サーバーレスコンピュートが使える
-- [ ] 完成見本のダッシュボード / Genie Agent に `CAN VIEW`
+⚠️ **参加者全員のフォルダに配置**が必要です。配置しないとスキルが読み込まれず、
+AI が手順を無視して勝手に進みます。
 
-## STEP 7 — MMF のスキルを配置
+```bash
+# MMF のリポジトリに公式のインストーラがあります
+python skills/install.py
 
-<!-- Phase 5 で追記 -->
+# または手動で
+databricks workspace import-dir skills/databricks-skills/many-model-forecasting \
+  /Users/${USER}/.assistant/skills --overwrite
+databricks workspace import skills/assistant_instructions.md \
+  /Users/${USER}/.assistant_instructions.md --format AUTO --language MARKDOWN --overwrite
+```
 
-## STEP 8 — 当日直前のウォームアップ
+⭐ MMF を最後まで通した結果を **`fc_sample` に `scm_*` として残しておく**と、
+当日は結果を見せるだけで済みます（`08` がそこを読みます）。
 
-- [ ] SQL ウェアハウスを起動しておく（コールドスタート回避）
-- [ ] パイプラインを 1 回空実行しておく（⚠️ サーバーレスの初回起動は 4〜6 分かかる）
-- [ ] ⭐ **セット B の CSV はまだ投入しない**（当日投入するのがデモの山場）
+⚠️ MMF は Databricks の正式サポート対象外（AS-IS）で、**DBR 18 for ML 以上**が必要です。
+⭐ CPU だけで動くモデルに絞れば GPU は不要です。
 
-## STEP 9 — ⭐ 参加者 1 名での通しリハーサル
+## STEP 9 — 当日直前のウォームアップ
 
-⚠️ **最重要**。管理者アカウントではなく、**参加者グループの権限だけを持つアカウント**で
+- [ ] SQL ウェアハウスを起動しておく
+- [ ] 見本パイプラインを 1 回空実行しておく
+- [ ] ⚠️ **セット B はまだ投入しない**
+
+## STEP 10 — ⭐ 参加者 1 名での通しリハーサル
+
+⚠️⚠️ **最重要。** 管理者アカウントではなく、**参加者グループの権限だけを持つアカウント**で
 `HANDSON.md` を上から読み、書かれている通りにだけ操作して最後まで通してください。
 
 - [ ] 各 Part の所要時間を実測する
-- [ ] 権限エラーが出た箇所を STEP 6 に反映する
+- [ ] 権限エラーが出た箇所を STEP 2 の GRANT に反映する
+- [ ] ⚠️ ML 系ノートブック（`04`〜`06`）で **環境バージョンが 5 になっているか**確認する
+
+---
+
+## 当日の進め方（セット B の投入タイミング）
+
+⭐ **`07_jobs` の直前**が良いタイミングです。
+
+1. 参加者が `06_retrain` まで終わったら、講師が
+   ジョブ `[handson] 01 サンプルデータを Volume に投入` を **`load_set = B`** で実行
+2. 参加者に `00_setup_my_pipeline` の実行セルをもう一度回してもらう
+   → ⭐ **2026-08 のデータが増えます**
+3. `06_retrain` をもう一度回してもらう
+   → ⭐ **新しいデータで再学習し、勝てば本番が入れ替わります**
+
+⚠️ 同名ファイルの上書きでは Auto Loader が取り込まないため、
+セット B は**別ファイル名**（`shipments_2026_08.csv`）になっています。
+
+### ⚠️ 「昇格」は必ず起きるわけではありません
+
+1 か月分データが増えただけでは挑戦者と本番の差はわずかで、**見送りになることもあります**。
+⭐ 見送りも正しい結果です（「作り直しても良くならないことがある」が伝わります）が、
+当日「昇格」を見せたい場合は次のどちらかを使ってください。
+
+| 方法 | やり方 |
+|---|---|
+| ⭐ 推奨 | **セット B を投入する前に `04` を実行**しておく（本番モデルが古いデータで学習された状態を作る） |
+| 代替 | `06` の判定基準（MAE と MASE）を実行結果を見ながら口頭で説明し、**両方の分岐**を見せる |
+
+⚠️ **どちらの結果になっても説明できるよう、事前に一度通しておいてください。**
+
+---
+
+## 後片付け
+
+```bash
+# 参加者のスキーマとパイプライン
+#   → notebooks/admin/99_cleanup を dry_run=false で実行
+
+# 共有スキーマ・見本・Volume・パイプライン・ジョブ
+databricks bundle destroy -t dev -p <profile>
+```
+
+⚠️ カタログ自体は意図せず消さないよう手動で削除してください。

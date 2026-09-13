@@ -59,7 +59,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0"
+# MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0" matplotlib
 
 # COMMAND ----------
 
@@ -178,8 +178,25 @@ print(f"「去年と同じ」の MAE: {baseline_mae:.2f}")
 EXPERIMENT = f"/Users/{spark.sql('SELECT current_user()').collect()[0][0]}/需要予測ハンズオン"
 mlflow.set_experiment(EXPERIMENT)
 
-# ⭐ 再学習では設定を少し変えてみます（本番では前回のベスト設定を引き継ぐのが普通です）
-params = {"max_depth": 8, "learning_rate": 0.04, "max_iter": 500}
+# ⭐⭐ 再学習では **今の本番と同じ設定**を引き継ぎます。
+#
+# ⚠️ ここで設定も一緒に変えてしまうと、成績が変わった理由が
+#    「データが新しくなったから」なのか「設定を変えたから」なのか
+#    分からなくなります。
+# ⭐ 「設定は据え置き、データだけ新しくする」のが再学習の基本形です。
+champ_run = client.get_run(champ.run_id)
+INHERIT = ("max_depth", "learning_rate", "max_iter")
+params = {
+    k: (int(v) if k in ("max_depth", "max_iter") else float(v))
+    for k, v in champ_run.data.params.items()
+    if k in INHERIT
+}
+if not params:
+    # 本番モデルに設定が記録されていない場合の保険
+    params = {"max_depth": 6, "learning_rate": 0.05, "max_iter": 400}
+    print("⚠️ 本番モデルの設定が読めなかったので既定値を使います")
+
+print("引き継いだ設定:", params)
 
 with mlflow.start_run(run_name="再学習") as run:
     model = HistGradientBoostingRegressor(random_state=42, **params)
@@ -254,6 +271,44 @@ for alias in ("champion", "challenger"):
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### ⭐ グラフで比べる
+# MAGIC
+# MAGIC ⭐ **棒が低い方が良い**（誤差が小さい）。
+# MAGIC 「去年と同じ」の棒より低くなっていなければ、そのモデルは使う意味がありません。
+
+# COMMAND ----------
+
+import os
+import sys
+
+_p = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+_root = os.path.normpath(os.path.join(os.path.dirname(_p), ".."))
+_src = f"/Workspace{_root}/src" if not _root.startswith("/Workspace") else f"{_root}/src"
+if _src not in sys.path:
+    sys.path.insert(0, _src)
+
+from mlops.plots import plot_grouped_bars  # noqa: E402
+
+# 上の比較セルで求めた scores から取り出す
+_cp, _ch = scores["champion"], scores["challenger"]
+
+compare = pd.DataFrame({
+    "model": [
+        "baseline (last year)",
+        f"@champion v{_cp['version']}",
+        f"@challenger v{_ch['version']}",
+    ],
+    "mae": [baseline_mae, _cp["mae"], _ch["mae"]],
+})
+display(plot_grouped_bars(
+    compare, "model", ["mae"],
+    "mean absolute error (lower is better)",
+    ylabel="mean absolute error (units)",
+))
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 4. ⭐ 勝っていたら本番を入れ替える
 # MAGIC
 # MAGIC ⚠️ **判定の基準をコードに書いておくことが大事です。**
@@ -266,6 +321,17 @@ for alias in ("champion", "challenger"):
 # MAGIC | 挑戦者の MAE が本番より小さい | ⭐ 昇格 |
 # MAGIC | かつ MASE が 1.0 未満（「去年と同じ」に勝っている） | ⭐ 昇格 |
 # MAGIC | どちらか満たさない | ⚠️ 見送り。挑戦者は記録として残す |
+# MAGIC
+# MAGIC > ⚠️ **昇格するかどうかは、そのときのデータで決まります。**
+# MAGIC > 1 か月分データが増えただけでは差がわずかなので、**見送りになることもあります。**
+# MAGIC >
+# MAGIC > ⭐ **見送りも正しい結果です。** 「作り直したのに良くならなかった」という事実が
+# MAGIC > 記録として残り、本番は据え置かれる——これが仕組みで守られている状態です。
+# MAGIC > ⚠️ 人の判断でやっていると、ここで「せっかく作ったから入れ替えよう」が起きます。
+# MAGIC
+# MAGIC > 💡 判定は**タグに記録された数字ではなく、その場で両モデルを走らせた結果**で
+# MAGIC > 行っています。学習データの範囲が違う可能性があるため、記録の数字同士を
+# MAGIC > 比べるのは公平ではありません。
 
 # COMMAND ----------
 
