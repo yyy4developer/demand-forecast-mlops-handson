@@ -98,8 +98,11 @@ wanted = {"A", "B"} if load_set == "all" else {load_set}
 
 # COMMAND ----------
 
-for sub in {sub for _, sub, _ in FILE_MAP} | set(EMPTY_DIRS):
-    os.makedirs(f"{volume_root}/{sub}", exist_ok=True)
+# ⚠️ Volume 配下のディレクトリ作成は `os.makedirs` ではなく `dbutils.fs.mkdirs` を使う。
+#    `os.makedirs` は親ディレクトリを順に作ろうとするため、Volume より上の階層
+#    (/Volumes/<catalog>/<schema>) に到達して "Operation not supported" で失敗する。
+for sub in sorted({sub for _, sub, _ in FILE_MAP} | set(EMPTY_DIRS)):
+    dbutils.fs.mkdirs(f"{volume_root}/{sub}")
 
 copied, skipped = [], []
 for filename, sub, belongs_to in FILE_MAP:

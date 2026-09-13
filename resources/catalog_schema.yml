@@ -1,15 +1,28 @@
-# カタログと共有スキーマ
+# スキーマ構成
 #
-# 参加者ごとのスキーマ (fc_ws_<user_name>) は notebooks/_config.py が
-# 実行時に自動作成するため、ここでは定義しない。
+# ⭐ 本来のデータ基盤なら、bronze → silver → gold は**共通のスキーマに 1 セット**作ります。
+#    今回は「参加者一人ひとりが取り込みから体験する」ことを目的にしているため、
+#    **共通スキーマ (CSV) → 個人スキーマ (bronze→silver→gold)** という流れにしています。
+#
+#   | スキーマ | 中身 | 誰が書くか |
+#   |---|---|---|
+#   | fc_shared      | CSV を置く Volume だけ            | 管理者 |
+#   | fc_sample      | 完成見本の gold (参考用)          | 管理者 |
+#   | fc_ws_<user>   | 各参加者の bronze→silver→gold 以降 | 参加者自身 |
+#
+# ⚠️ カタログはここでは作りません。この metastore は Default Storage 構成のため
+#    API 経由の CREATE CATALOG が失敗します (SQL 経由なら通る)。
+#    → `notebooks/admin/00_prepare_environment.py` で作成します。
+#
+# 参加者ごとのスキーマは notebooks/_config.py が実行時に自動作成します。
 resources:
-  catalogs:
-    handson_catalog:
-      name: ${var.catalog}
-      comment: "需要予測 × MLOps ハンズオン用カタログ"
-
   schemas:
     shared:
       catalog_name: ${var.catalog}
       name: ${var.shared_schema}
-      comment: "サンプルデータの共有スキーマ。参加者は読み取りのみ。"
+      comment: "CSV を置く Volume 専用のスキーマ。参加者は Volume の読み取りのみ。"
+
+    sample:
+      catalog_name: ${var.catalog}
+      name: ${var.sample_schema}
+      comment: "完成見本の gold テーブル。参加者は読み取りのみ。自分で作る前に「出来上がり」を見るためのもの。"

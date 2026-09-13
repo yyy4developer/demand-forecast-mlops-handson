@@ -1,0 +1,27 @@
+# 完成見本のメダリオンパイプライン（管理者が事前に 1 回動かす）
+#
+# ⭐ 参加者は**このパイプラインを使いません**。
+#    参加者は `notebooks/00_setup_my_pipeline` で**自分専用のパイプラインを作って動かします**
+#    (同じ SQL ファイルを、自分のスキーマ向けに実行するだけ)。
+#
+# ⭐ このパイプラインの役割は 2 つ:
+#    1. 完成見本の gold を `fc_sample` に用意する（見本ダッシュボード / Genie Agent の参照先）
+#    2. SQL に変更を入れたとき、管理者が動作確認する場所
+resources:
+  pipelines:
+    medallion_sample:
+      name: "[handson] 見本 メダリオンパイプライン (bronze→silver→gold)"
+      catalog: ${var.catalog}
+      schema: ${var.sample_schema}
+      serverless: true
+      continuous: false
+      development: true
+      configuration:
+        landing_path: /Volumes/${var.catalog}/${var.shared_schema}/${var.landing_volume}
+      libraries:
+        - file:
+            path: ../src/pipelines/01_bronze.sql
+        - file:
+            path: ../src/pipelines/02_silver.sql
+        - file:
+            path: ../src/pipelines/03_gold.sql
