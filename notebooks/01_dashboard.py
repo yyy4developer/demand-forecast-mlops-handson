@@ -36,16 +36,23 @@
 
 from databricks.sdk import WorkspaceClient
 
+# ⭐ ダッシュボードの一覧は REST API で取得します。
+#    SDK のメソッド名はバージョンで変わることがあるため、REST の方が安定します。
 w = WorkspaceClient()
 host = w.config.host
 
-samples = [d for d in w.lakeview.list() if d.display_name and "見本" in d.display_name]
+listed = w.api_client.do("GET", "/api/2.0/lakeview/dashboards", query={"page_size": 100}) or {}
+samples = [d for d in (listed.get("dashboards") or []) if "見本" in (d.get("display_name") or "")]
+
 if samples:
     for d in samples:
-        displayHTML(f'<a href="{host}/dashboardsv3/{d.dashboard_id}/published" target="_blank">▶ {d.display_name}</a>')
+        displayHTML(
+            f'<a href="{host}/dashboardsv3/{d["dashboard_id"]}/published" target="_blank">'
+            f'▶ {d["display_name"]}</a>'
+        )
 else:
-    print("⚠️ 見本ダッシュボードが見つかりませんでした。講師に確認してください。")
-    print(f"   （ダッシュボード一覧: {host}/dashboards）")
+    print("⚠️ 見本ダッシュボードが見つかりませんでした。")
+    print(f"   ダッシュボード一覧から探してみてください: {host}/dashboards")
 
 # COMMAND ----------
 
