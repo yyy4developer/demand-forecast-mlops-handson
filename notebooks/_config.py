@@ -97,9 +97,32 @@ spark.sql(f"USE CATALOG {catalog}")
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {MY}")
 spark.sql(f"USE SCHEMA {schema}")
 
+# ⭐ SQL ウェアハウスの ID を自動で見つける。
+#    一部の機能（ai_forecast など）は SQL ウェアハウス上でしか動かないため、
+#    ノートブックからそこへクエリを投げるのに使います。
+def _find_warehouse_id() -> str:
+    try:
+        from databricks.sdk import WorkspaceClient
+
+        listed = WorkspaceClient().api_client.do("GET", "/api/2.0/sql/warehouses") or {}
+        whs = listed.get("warehouses") or []
+        # Pro か Serverless を優先（Classic では動かない機能があるため）
+        preferred = [
+            x for x in whs
+            if x.get("enable_serverless_compute") or x.get("warehouse_type") == "PRO"
+        ]
+        pick = (preferred or whs)
+        return pick[0]["id"] if pick else ""
+    except Exception:
+        return ""
+
+
+WAREHOUSE_ID = _find_warehouse_id()
+
 print("=" * 68)
 print(f"  あなたの作業スキーマ : {MY}")
 print(f"  CSV の置き場         : {LANDING_PATH}")
 print(f"  完成見本             : {SAMPLE}")
+print(f"  SQL ウェアハウス     : {WAREHOUSE_ID or '(見つかりませんでした)'}")
 print("=" * 68)
 print("※ 以降のノートブックは、あなたの作業スキーマに対して実行されます")
