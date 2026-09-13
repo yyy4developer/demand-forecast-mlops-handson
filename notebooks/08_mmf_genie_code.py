@@ -29,7 +29,8 @@
 # MAGIC | ⚠️ | 内容 |
 # MAGIC |---|---|
 # MAGIC | サポート | **Databricks の正式サポート対象外**（AS-IS で公開されているもの） |
-# MAGIC | 実行環境 | **Databricks Runtime for ML 18 以上**が必要 |
+# MAGIC | 実行環境 | ⭐ **サーバーレスで動きます**（公式ドキュメントは DBR 18 for ML を前提にしていますが、統計モデルだけならサーバーレスで足ります） |
+# MAGIC | GPU | ⭐ **不要**（GPU が要るのはニューラル予測と基盤モデルだけ） |
 # MAGIC | ⚠️⚠️ **1 回の指示では終わらない** | 意図的に**対話しながら進む**作りになっています（後述） |
 # MAGIC | 事前準備 | Genie Code に「スキル」を入れておく必要があります（講師が実施済み） |
 # MAGIC
@@ -145,10 +146,10 @@ MMF (Many Models Forecasting) を使って需要予測をしたい。
 # MAGIC | テーブル | 中身 |
 # MAGIC |---|---|
 # MAGIC | `scm_train_data` | MMF が使う形に整えた学習データ |
-# MAGIC | `scm_series_profile` | 系列ごとの統計的な性質と、予測しやすさの判定 |
 # MAGIC | `scm_evaluation_output` | **全モデル × 全系列**の検証結果 |
+# MAGIC | `scm_scoring_output` | 18 か月先の予測 |
 # MAGIC | ⭐ `scm_best_models` | **系列ごとに選ばれたベストモデル** |
-# MAGIC | `scm_evaluation_summary` | 業務向けのまとめ |
+# MAGIC | `scm_evaluation_summary` | 需要分類ごとに、どの手法が何系列で選ばれたか |
 
 # COMMAND ----------
 
@@ -173,6 +174,9 @@ else:
 # MAGIC
 # MAGIC ⭐ 「平均でいちばん強いモデル」と「系列ごとに選ばれるモデル」は別物です。
 # MAGIC だから **系列ごとに選ぶ**ことに意味があります。
+# MAGIC
+# MAGIC ⭐ 間欠需要向けのモデル（`CrostonSBA`）は、**平均スコアはいちばん良いのに
+# MAGIC 勝つ系列は少ない**——「そういう性質の品目にだけ強い」ということです。
 
 # COMMAND ----------
 
@@ -186,6 +190,29 @@ if mmf_tables and "scm_best_models" in mmf_tables:
     """))
 else:
     print("⚠️ scm_best_models が見つかりませんでした。")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ⭐⭐ 需要の性質ごとに、選ばれる手法が変わる
+# MAGIC
+# MAGIC ⭐ **これが今日いちばん見てほしい表です。**
+# MAGIC 「毎月安定して出る品目」と「出ない月がある品目」で、
+# MAGIC 選ばれる手法がはっきり分かれます。
+# MAGIC
+# MAGIC ⚠️ 1 つのモデルで全部を賄おうとすると、どこかの品目で必ず損をします。
+
+# COMMAND ----------
+
+if mmf_tables and "scm_evaluation_summary" in mmf_tables:
+    display(spark.sql(f"""
+        SELECT demand_class AS `需要分類`, model AS `選ばれたモデル`,
+               series_count AS `系列数`, ROUND(avg_metric, 4) AS `平均スコア`
+        FROM {SAMPLE_MMF}.scm_evaluation_summary
+        ORDER BY `需要分類`, `系列数` DESC
+    """))
+else:
+    print("⚠️ scm_evaluation_summary が見つかりませんでした。")
 
 # COMMAND ----------
 
