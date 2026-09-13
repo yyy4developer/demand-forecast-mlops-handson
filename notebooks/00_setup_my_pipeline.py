@@ -41,8 +41,8 @@
 # MAGIC %md
 # MAGIC ## 1. パイプラインを作る
 # MAGIC
-# MAGIC ⭐ 画面から作ることもできますが、ここでは **SDK で 1 回呼ぶだけ**にしています。
-# MAGIC 「同じ SQL を、ターゲットのスキーマだけ変えて動かす」ことが分かれば十分です。
+# MAGIC ⭐ 画面から作ることもできますが、ここでは **API を 1 回呼ぶだけ**にしています。
+# MAGIC 「同じ SQL を、書き込み先のスキーマだけ変えて動かす」ことが分かれば十分です。
 # MAGIC
 # MAGIC > 💡 同じ名前のパイプラインが既にあれば作り直しません（何度実行しても安全です）。
 
@@ -50,11 +50,15 @@
 
 import os
 import time
+import urllib.parse
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service import pipelines as pl
 
+# ⭐ パイプラインの作成・実行は REST API を直接呼びます。
+#    SDK の引数名はバージョンによって変わることがあるため（例: `schema` と `target`）、
+#    ランタイムに同梱された SDK のバージョンに左右されない形にしています。
 w = WorkspaceClient()
+api = w.api_client
 
 # このノートブックの 1 階層上が repo のルート（notebooks/ の親）
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
@@ -72,30 +76,39 @@ for f in SQL_FILES:
 
 # COMMAND ----------
 
-# 既に同じ名前のパイプラインがあれば再利用する
-existing = [p for p in w.pipelines.list_pipelines() if p.name == PIPELINE_NAME]
+# 同じ名前のパイプラインが既にあれば作り直さない（何度実行しても安全）
+_filter = urllib.parse.quote(f"name LIKE '{PIPELINE_NAME}'")
+found = api.do("GET", f"/api/2.0/pipelines?filter={_filter}") or {}
+existing = [p for p in (found.get("statuses") or []) if p.get("name") == PIPELINE_NAME]
 
 if existing:
-    pipeline_id = existing[0].pipeline_id
+    pipeline_id = existing[0]["pipeline_id"]
     print(f"✅ 既存のパイプラインを使います: {pipeline_id}")
 else:
-    created = w.pipelines.create(
-        name=PIPELINE_NAME,
-        catalog=catalog,
-        # ⚠️ ターゲットスキーマの指定は `schema`（`target` は古い書き方）
-        schema=schema,
-        serverless=True,
-        continuous=False,
-        development=True,
-        # SQL 側から ${landing_path} として参照される
-        configuration={"landing_path": LANDING_PATH},
-        libraries=[
-            pl.PipelineLibrary(file=pl.FileLibrary(path=f"{REPO_ROOT}/src/pipelines/{f}"))
-            for f in SQL_FILES
-        ],
+    created = api.do(
+        "POST",
+        "/api/2.0/pipelines",
+        body={
+            "name": PIPELINE_NAME,
+            "catalog": catalog,
+            # 書き込み先のスキーマ。ここを自分のスキーマにするだけで、
+            # 同じ SQL が「自分専用のパイプライン」になります。
+            "schema": schema,
+            "serverless": True,
+            "continuous": False,
+            "development": True,
+            # SQL 側から ${landing_path} として参照される
+            "configuration": {"landing_path": LANDING_PATH},
+            "libraries": [
+                {"file": {"path": f"{REPO_ROOT}/src/pipelines/{f}"}} for f in SQL_FILES
+            ],
+        },
     )
-    pipeline_id = created.pipeline_id
+    pipeline_id = created["pipeline_id"]
     print(f"✅ パイプラインを作成しました: {pipeline_id}")
+    # ⚠️ 作成直後は内部の初期化が終わっていないことがあり、すぐ実行すると失敗します。
+    #    少し待ってから実行に進みます（下の実行セルにもリトライを入れてあります）。
+    time.sleep(15)
 
 pipeline_url = f"{w.config.host}/pipelines/{pipeline_id}"
 displayHTML(f'<a href="{pipeline_url}" target="_blank">▶ パイプラインを画面で開く</a>')
@@ -113,30 +126,50 @@ displayHTML(f'<a href="{pipeline_url}" target="_blank">▶ パイプラインを
 
 # COMMAND ----------
 
-update = w.pipelines.start_update(pipeline_id=pipeline_id)
-update_id = update.update_id
-print(f"実行を開始しました (update_id={update_id})\n")
-
 TERMINAL = {"COMPLETED", "FAILED", "CANCELED"}
-started = time.time()
-last_state = None
+MAX_TRIES = 3
 
-while True:
-    info = w.pipelines.get_update(pipeline_id=pipeline_id, update_id=update_id).update
-    state = str(info.state.value if info.state else "UNKNOWN")
-    if state != last_state:
-        print(f"  [{int(time.time() - started):>4}秒] {state}")
-        last_state = state
-    if state in TERMINAL:
+
+def run_pipeline_once() -> str:
+    """パイプラインを 1 回実行し、終了状態を返す。"""
+    started_update = api.do("POST", f"/api/2.0/pipelines/{pipeline_id}/updates", body={})
+    update_id = started_update["update_id"]
+    print(f"    実行開始 (update_id={update_id[:12]}…)")
+
+    t0 = time.time()
+    state = None
+    while True:
+        info = api.do("GET", f"/api/2.0/pipelines/{pipeline_id}/updates/{update_id}")
+        new_state = (info.get("update") or {}).get("state", "UNKNOWN")
+        if new_state != state:
+            print(f"      [{int(time.time() - t0):>4}秒] {new_state}")
+            state = new_state
+        if state in TERMINAL:
+            return state
+        time.sleep(15)
+
+
+# ⚠️ 作ったばかりのパイプラインは、1 回目の実行がまれに失敗します
+#    （内部の初期化と実行が重なるため）。数十秒待って再実行すれば通るので、
+#    ここでは自動で 3 回まで試します。
+started = time.time()
+final_state = None
+for attempt in range(1, MAX_TRIES + 1):
+    print(f"  試行 {attempt}/{MAX_TRIES}")
+    final_state = run_pipeline_once()
+    if final_state == "COMPLETED":
         break
-    time.sleep(15)
+    if attempt < MAX_TRIES:
+        print(f"  ⚠️ {final_state} で終了しました。30 秒待って再実行します…\n")
+        time.sleep(30)
 
 elapsed = int(time.time() - started)
-if last_state == "COMPLETED":
-    print(f"\n✅ 完了しました（{elapsed} 秒）")
+if final_state == "COMPLETED":
+    print(f"\n✅ 完了しました（合計 {elapsed} 秒）")
 else:
     raise RuntimeError(
-        f"パイプラインが {last_state} で終了しました。上のリンクから画面を開いてエラー内容を確認してください。"
+        f"パイプラインが {MAX_TRIES} 回とも {final_state} で終了しました。"
+        "上のリンクから画面を開いてエラー内容を確認してください。"
     )
 
 # COMMAND ----------
@@ -178,16 +211,17 @@ for name, desc in GOLD_TABLES:
 # MAGIC --   intermittent = 出ない月がある
 # MAGIC --   lumpy        = 出ない月があり、出ると数量も大きく振れる
 # MAGIC -- ⚠️ だから「全品目に同じモデル」ではうまくいきません。
+# MAGIC -- ⚠️ 日本語の別名は必ずバッククォートで囲みます（囲まないと INVALID_IDENTIFIER になります）
 # MAGIC SELECT
-# MAGIC   demand_class            AS 需要分類,
-# MAGIC   COUNT(*)                AS 品目数,
-# MAGIC   ROUND(MIN(adi), 2)      AS ADI最小,
-# MAGIC   ROUND(MAX(adi), 2)      AS ADI最大,
-# MAGIC   ROUND(MIN(cv2), 2)      AS CV2最小,
-# MAGIC   ROUND(MAX(cv2), 2)      AS CV2最大
+# MAGIC   demand_class            AS `需要分類`,
+# MAGIC   COUNT(*)                AS `品目数`,
+# MAGIC   ROUND(MIN(adi), 2)      AS `ADI最小`,
+# MAGIC   ROUND(MAX(adi), 2)      AS `ADI最大`,
+# MAGIC   ROUND(MIN(cv2), 2)      AS `CV2最小`,
+# MAGIC   ROUND(MAX(cv2), 2)      AS `CV2最大`
 # MAGIC FROM dim_item
 # MAGIC GROUP BY demand_class
-# MAGIC ORDER BY 品目数 DESC
+# MAGIC ORDER BY `品目数` DESC
 
 # COMMAND ----------
 
@@ -196,15 +230,15 @@ for name, desc in GOLD_TABLES:
 # MAGIC -- ⚠️ 率(APE)で見ると酷い数字ですが、これは**数量の少ない品目が率を押し上げている**ためです。
 # MAGIC --    個数(絶対誤差)で見ると印象が変わります。「どの指標で見るか」で結論が変わる好例です。
 # MAGIC SELECT
-# MAGIC   i.demand_class                        AS 需要分類,
-# MAGIC   COUNT(*)                              AS 件数,
-# MAGIC   ROUND(AVG(a.ape) * 100, 1)            AS 平均誤差率_pct,
-# MAGIC   ROUND(AVG(a.abs_error), 1)            AS 平均誤差_個数,
-# MAGIC   ROUND(AVG(a.within_interval) * 100, 1) AS 予測区間に収まった率_pct
+# MAGIC   i.demand_class                         AS `需要分類`,
+# MAGIC   COUNT(*)                               AS `件数`,
+# MAGIC   ROUND(AVG(a.ape) * 100, 1)             AS `平均誤差率_pct`,
+# MAGIC   ROUND(AVG(a.abs_error), 1)             AS `平均誤差_個数`,
+# MAGIC   ROUND(AVG(a.within_interval) * 100, 1) AS `予測区間に収まった率_pct`
 # MAGIC FROM fct_forecast_accuracy a
 # MAGIC JOIN dim_item i USING (item_code)
 # MAGIC GROUP BY i.demand_class
-# MAGIC ORDER BY 平均誤差率_pct DESC
+# MAGIC ORDER BY `平均誤差率_pct` DESC
 
 # COMMAND ----------
 
