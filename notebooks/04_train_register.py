@@ -121,17 +121,48 @@ display(feat.head(5))
 # MAGIC 未来のデータで学習して過去を予測することになり、本番よりずっと良い数字が出ます。
 # MAGIC
 # MAGIC ⭐ **ある月で線を引き、それ以前で学習し、それ以降で検証**します。
-# MAGIC ここでは直近 12 か月を検証に使います。
+# MAGIC
+# MAGIC ### ⭐⭐ ここでは「半年前にモデルを作った」ことにします
+# MAGIC
+# MAGIC 実際の現場では、**本番で動いているモデルは過去に作られたもの**です。
+# MAGIC 作った後に増えたデータを、そのモデルは見ていません。
+# MAGIC
+# MAGIC ⭐ その状況を再現するため、**直近 6 か月を「まだ存在しなかったこと」にして**学習します。
+# MAGIC
+# MAGIC ```
+# MAGIC   |------- 学習に使う -------|-- 検証 --|== 見ないことにする ==|
+# MAGIC                                          ↑ ここから先は「モデルを作った後に届いたデータ」
+# MAGIC ```
+# MAGIC
+# MAGIC ⚠️ **これは手抜きではありません。** 後のパート（`06_retrain`）で
+# MAGIC 「新しいデータで作り直すと本当に良くなるのか」を検証するために、
+# MAGIC **本番モデルが古い**という現実的な前提を作っています。
 
 # COMMAND ----------
 
-split_ym = sorted(feat[TIME_COL].unique())[-12]
-train = feat[feat[TIME_COL] < split_ym]
-valid = feat[feat[TIME_COL] >= split_ym]
+# ⭐ 「モデルを作った時点」を何か月前に置くか
+MODEL_BUILT_MONTHS_AGO = 6
+# 検証に使う月数
+VALID_MONTHS = 12
 
-print(f"分割の境目 : {pd.Timestamp(split_ym).date()}")
-print(f"学習       : {len(train):,} 行  ({train[TIME_COL].min().date()} 〜 {train[TIME_COL].max().date()})")
-print(f"検証       : {len(valid):,} 行  ({valid[TIME_COL].min().date()} 〜 {valid[TIME_COL].max().date()})")
+months = sorted(feat[TIME_COL].unique())
+# モデルを作った時点（この月までのデータしか使わない）
+as_of_ym = months[-1 - MODEL_BUILT_MONTHS_AGO]
+# 検証はその直前 12 か月
+split_ym = months[-1 - MODEL_BUILT_MONTHS_AGO - VALID_MONTHS + 1]
+
+available = feat[feat[TIME_COL] <= as_of_ym]
+train = available[available[TIME_COL] < split_ym]
+valid = available[available[TIME_COL] >= split_ym]
+
+print(f"データの最終月       : {pd.Timestamp(months[-1]).date()}")
+print(f"⭐ モデルを作った時点 : {pd.Timestamp(as_of_ym).date()}  "
+      f"（ここから先の {MODEL_BUILT_MONTHS_AGO} か月は見ないことにします）")
+print(f"分割の境目           : {pd.Timestamp(split_ym).date()}")
+print(f"学習                 : {len(train):,} 行  "
+      f"({train[TIME_COL].min().date()} 〜 {train[TIME_COL].max().date()})")
+print(f"検証                 : {len(valid):,} 行  "
+      f"({valid[TIME_COL].min().date()} 〜 {valid[TIME_COL].max().date()})")
 
 # COMMAND ----------
 
@@ -211,6 +242,10 @@ for trial in TRIALS:
         mase = mae / baseline_mae
 
         mlflow.log_params(trial)
+        # ⭐ 「いつまでのデータで学習したか」を残す。06 でここを見て劣化を説明します。
+        # ⭐ 「学習に使った最終月」を残す（06 でここを見て劣化を説明します）
+        mlflow.log_param("trained_through", str(pd.Timestamp(train[TIME_COL].max()).date()))
+        mlflow.log_param("data_available_through", str(pd.Timestamp(as_of_ym).date()))
         mlflow.log_metrics({
             "mae": mae,
             "mase": mase,
@@ -287,6 +322,10 @@ print(f"✅ エイリアス @champion をバージョン {version} に付けま�
 client.set_model_version_tag(MODEL_NAME, version, "mae", f"{best['mae']:.4f}")
 client.set_model_version_tag(MODEL_NAME, version, "mase", f"{best['mase']:.4f}")
 client.set_model_version_tag(MODEL_NAME, version, "baseline_mae", f"{baseline_mae:.4f}")
+client.set_model_version_tag(
+    MODEL_NAME, version, "trained_through", str(pd.Timestamp(train[TIME_COL].max()).date()))
+client.set_model_version_tag(
+    MODEL_NAME, version, "data_available_through", str(pd.Timestamp(as_of_ym).date()))
 
 displayHTML(
     f'<a href="{w.config.host}/explore/data/models/{catalog}/{schema}/demand_forecast" '

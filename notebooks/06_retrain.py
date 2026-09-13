@@ -151,21 +151,42 @@ for mv in client.search_model_versions(f"name='{MODEL_NAME}'"):
 # MAGIC
 # MAGIC ⭐ 学習のコードは `04` とまったく同じです。**違うのは使うデータの範囲だけ**です。
 # MAGIC
-# MAGIC ⚠️ 比べるときの条件を揃えるため、**検証に使う期間は前回と同じ**にします。
-# MAGIC 検証期間が違うと「新しい方が良い」の比較が成り立ちません。
+# MAGIC ### ⭐⭐ 本番モデルは「古い」
+# MAGIC
+# MAGIC `04` で作った本番モデルは、**半年前までのデータしか見ていません**（上に表示されています）。
+# MAGIC その後の半年分のデータを、本番モデルは知りません。
+# MAGIC
+# MAGIC ```
+# MAGIC   本番モデル  |------- 学習 -------|-- 検証 --|          （ここまでしか知らない）
+# MAGIC   今回        |----------- 学習 -----------|-- 検証 --|  （最新まで使う）
+# MAGIC                                             ↑ この期間で両方を比べます
+# MAGIC ```
+# MAGIC
+# MAGIC ⚠️ **比べる期間は両モデルで同じ**にします。学習に使った範囲は違っても、
+# MAGIC 採点の問題用紙が同じでなければ公平になりません。
 
 # COMMAND ----------
 
 pdf = spark.table(f"{MY}.fct_shipments").select(*SERIES_COLS, TIME_COL, TARGET_COL).toPandas()
 feat = training_frame(pdf)
 
+VALID_MONTHS = 12
+
 months = sorted(feat[TIME_COL].unique())
-split_ym = months[-12]
+# ⭐ 今回は最新までのデータを全部使う。検証は直近 12 か月。
+split_ym = months[-VALID_MONTHS]
 train = feat[feat[TIME_COL] < split_ym]
 valid = feat[feat[TIME_COL] >= split_ym]
 
-print(f"データの最終月 : {pd.Timestamp(months[-1]).date()}")
-print(f"検証の開始月   : {pd.Timestamp(split_ym).date()}  ← 前回と同じ条件で比べます")
+champ_trained_through = tag_text(champ, "trained_through", "(不明)")
+new_trained_through = str(pd.Timestamp(train[TIME_COL].max()).date())
+
+print(f"データの最終月                  : {pd.Timestamp(months[-1]).date()}")
+print(f"⚠️ 本番モデルが学習に使った最終月 : {champ_trained_through}")
+print(f"⭐ 今回学習に使う最終月          : {new_trained_through}")
+print(f"   → 本番モデルより新しいデータを見ています")
+print(f"両モデルを比べる期間            : {pd.Timestamp(split_ym).date()} 〜 "
+      f"{pd.Timestamp(months[-1]).date()}  （同じ問題用紙で採点します）")
 print(f"学習 {len(train):,} 行 / 検証 {len(valid):,} 行")
 
 # 比べる相手（「去年と同じ」）
@@ -207,6 +228,7 @@ with mlflow.start_run(run_name="再学習") as run:
     mase = mae / baseline_mae
 
     mlflow.log_params(params)
+    mlflow.log_param("trained_through", new_trained_through)
     mlflow.log_metrics({"mae": mae, "mase": mase, "baseline_mae": baseline_mae})
     mlflow.sklearn.log_model(
         model, name="model",
@@ -233,6 +255,8 @@ client.set_registered_model_alias(MODEL_NAME, "challenger", challenger_version)
 client.set_model_version_tag(MODEL_NAME, challenger_version, "mae", f"{mae:.4f}")
 client.set_model_version_tag(MODEL_NAME, challenger_version, "mase", f"{mase:.4f}")
 client.set_model_version_tag(MODEL_NAME, challenger_version, "baseline_mae", f"{baseline_mae:.4f}")
+client.set_model_version_tag(
+    MODEL_NAME, challenger_version, "trained_through", new_trained_through)
 
 print(f"✅ バージョン {challenger_version} を登録し、@challenger を付けました")
 print(f"⚠️ 本番（@champion）はまだバージョン {champ.version} のままです")
@@ -257,16 +281,18 @@ for alias in ("champion", "challenger"):
     p = np.clip(m.predict(X_valid), 0, None)
     scores[alias] = {
         "version": mv.version,
+        "trained_through": tag_text(mv, "trained_through", "?"),
         "mae": float(np.mean(np.abs(y_valid - p))),
     }
     scores[alias]["mase"] = scores[alias]["mae"] / baseline_mae
 
-print(f"{'':<12} {'バージョン':>8} {'MAE':>10} {'MASE':>8}")
-print("-" * 44)
-print(f"{'去年と同じ':<12} {'-':>8} {baseline_mae:>10.2f} {1.000:>8.3f}")
+print(f"{'':<12} {'版':>4} {'学習の最終月':>14} {'MAE':>10} {'MASE':>8}")
+print("-" * 54)
+print(f"{'去年と同じ':<12} {'-':>4} {'-':>14} {baseline_mae:>10.2f} {1.000:>8.3f}")
 for alias in ("champion", "challenger"):
     s = scores[alias]
-    print(f"{'@' + alias:<12} {s['version']:>8} {s['mae']:>10.2f} {s['mase']:>8.3f}")
+    print(f"{'@' + alias:<12} {s['version']:>4} {s['trained_through']:>14} "
+          f"{s['mae']:>10.2f} {s['mase']:>8.3f}")
 
 # COMMAND ----------
 
@@ -322,11 +348,14 @@ display(plot_grouped_bars(
 # MAGIC | かつ MASE が 1.0 未満（「去年と同じ」に勝っている） | ⭐ 昇格 |
 # MAGIC | どちらか満たさない | ⚠️ 見送り。挑戦者は記録として残す |
 # MAGIC
-# MAGIC > ⚠️ **昇格するかどうかは、そのときのデータで決まります。**
-# MAGIC > 1 か月分データが増えただけでは差がわずかなので、**見送りになることもあります。**
+# MAGIC > ⭐ **今回は挑戦者が勝つはずです。** 本番モデルは半年前までのデータしか
+# MAGIC > 見ていないので、その後の変化に追いつけていません。
+# MAGIC > **これが「モデルは作った瞬間から古くなる」の中身です。**
 # MAGIC >
-# MAGIC > ⭐ **見送りも正しい結果です。** 「作り直したのに良くならなかった」という事実が
-# MAGIC > 記録として残り、本番は据え置かれる——これが仕組みで守られている状態です。
+# MAGIC > ⚠️ ただし**いつも勝つわけではありません。** 需要の傾向が変わっていなければ
+# MAGIC > 古いモデルでも十分で、見送りになります。
+# MAGIC > ⭐ **見送りも正しい結果です。**「作り直したのに良くならなかった」が記録に残り、
+# MAGIC > 本番は据え置かれる——これが仕組みで守られている状態です。
 # MAGIC > ⚠️ 人の判断でやっていると、ここで「せっかく作ったから入れ替えよう」が起きます。
 # MAGIC
 # MAGIC > 💡 判定は**タグに記録された数字ではなく、その場で両モデルを走らせた結果**で
