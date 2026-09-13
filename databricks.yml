@@ -1,0 +1,56 @@
+# =============================================================================
+# 需要予測 × MLOps ハンズオン — Databricks Asset Bundle
+# =============================================================================
+# ハンズオンの「事前構築物」はすべてこの bundle で作られる:
+#   - カタログ / 共有スキーマ / landing Volume
+#   - サンプルデータ投入ジョブ
+#   - bronze → silver → gold のパイプライン (Lakeflow Declarative Pipelines)
+#   - 完成見本のダッシュボードと Genie Agent
+#   - バッチ推論 / 再学習ジョブの完成見本
+#
+# 参加者が当日つくるものは bundle には含めない (自分の手で作るのが目的)。
+#
+# ## 使い方
+#
+#   databricks bundle validate -t dev -p <profile>
+#   databricks bundle deploy   -t dev -p <profile>
+#
+# ワークスペースの URL は **プロファイルから解決される**ため、ここには書かない。
+# 別のワークスペースで使う場合は `databricks auth login` でプロファイルを作り、
+# `-p <profile>` を差し替えるだけでよい。
+# =============================================================================
+
+bundle:
+  name: demand_forecast_mlops_handson
+
+variables:
+  catalog:
+    description: "ハンズオンで使うカタログ名"
+    default: demand_forecast_handson
+  shared_schema:
+    description: "全参加者が参照する共有スキーマ (サンプルデータの置き場)"
+    default: fc_shared
+  landing_volume:
+    description: "CSV を投入する Volume 名"
+    default: landing
+  participant_group:
+    description: "参加者グループ名 (権限付与の対象)"
+    default: handson-participants
+  warehouse_id:
+    description: "ダッシュボード / Genie Agent が使う SQL ウェアハウス ID"
+    default: ""
+
+include:
+  - resources/*.yml
+
+sync:
+  include:
+    - notebooks/**
+    - src/**
+    - data/**
+    - prompts/**
+
+targets:
+  dev:
+    mode: development
+    default: true

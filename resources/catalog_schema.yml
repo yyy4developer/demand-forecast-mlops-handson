@@ -1,0 +1,15 @@
+# カタログと共有スキーマ
+#
+# 参加者ごとのスキーマ (fc_ws_<user_name>) は notebooks/_config.py が
+# 実行時に自動作成するため、ここでは定義しない。
+resources:
+  catalogs:
+    handson_catalog:
+      name: ${var.catalog}
+      comment: "需要予測 × MLOps ハンズオン用カタログ"
+
+  schemas:
+    shared:
+      catalog_name: ${var.catalog}
+      name: ${var.shared_schema}
+      comment: "サンプルデータの共有スキーマ。参加者は読み取りのみ。"

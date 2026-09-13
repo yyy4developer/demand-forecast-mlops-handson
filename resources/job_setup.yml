@@ -1,0 +1,22 @@
+# サンプルデータを Volume へ投入するジョブ (管理者が事前に 1 回実行する)
+#
+# ★ CSV セット A / セット B を分けて投入できる:
+#     load_set: "A"    → 2020-01 〜 2026-07 (事前投入)
+#     load_set: "B"    → 2026-08 のみ       (ハンズオン当日に投入)
+#     load_set: "all"  → 両方
+resources:
+  jobs:
+    setup_load_sample_data:
+      name: "[handson] 01 サンプルデータを Volume に投入"
+      tasks:
+        - task_key: load_csv_to_volume
+          notebook_task:
+            notebook_path: ../src/setup/load_csv_to_volume.py
+            base_parameters:
+              bundle_file_path: ${workspace.file_path}
+              catalog: ${var.catalog}
+              schema: ${var.shared_schema}
+              volume: ${var.landing_volume}
+              load_set: "A"
+      queue:
+        enabled: true

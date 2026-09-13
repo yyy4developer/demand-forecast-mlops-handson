@@ -1,0 +1,49 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfplan
+tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform.tfvars
+terraform.tfvars.*
+!terraform.tfvars.example
+
+# Credentials / secrets (never commit)
+.env
+.env.local
+*.pem
+*.key
+# any JSON under terraform/ is treated as a potential credential (e.g. GCP SA key)
+terraform/*.json
+
+# Databricks
+.databricks/
+.deploy_state.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+
+# IDE / OS
+.idea/
+.vscode/
+.cursor/
+.DS_Store
+Thumbs.db
+
+# uv
+.uv/
+uv.lock
+
+# ノートブックの出力（顧客データが混入しないよう commit しない）
+*.ipynb_checkpoints/

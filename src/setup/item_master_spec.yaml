@@ -1,0 +1,421 @@
+# =============================================================================
+# サンプルデータ仕様 — 架空の産業用機器メーカー「アクアテック工業」
+# =============================================================================
+# 需要予測ハンズオン用のサンプルデータを、**誰が実行しても同じ結果になる形**で
+# 生成するための仕様ファイルです。
+#
+# 各品目には「需要分類 / ADI / CV2 / 月次平均数量」の目標値が定義されています。
+# generate_sample_data.py はこの目標値を再現するように乱数系列を生成し、
+# 生成後に実測値を再計算して目標との乖離を検証します。
+#
+# 用語:
+#   ADI (Average Demand Interval) = 需要が発生する平均間隔 (月数)
+#       ADI = 全期間の月数 / 需要が発生した月数。1.0 なら毎月需要がある。
+#   CV2 (squared Coefficient of Variation) = 非ゼロ需要のばらつき (変動係数の2乗)
+#       CV2 = (標準偏差 / 平均)^2。大きいほど数量の振れが激しい。
+#
+#   Syntetos-Boylan の需要分類 (ADI=1.32 / CV2=0.49 が閾値):
+#       smooth       : ADI 小 / CV2 小 — 毎月安定して出る
+#       erratic      : ADI 小 / CV2 大 — 毎月出るが数量が振れる
+#       intermittent : ADI 大 / CV2 小 — 出ない月がある / 数量は安定
+#       lumpy        : ADI 大 / CV2 大 — 出ない月があり、出ると数量も振れる
+#       lumpy_severe : lumpy のうち特に CV2 が大きいもの (本仕様の独自区分)
+# =============================================================================
+
+meta:
+  company: アクアテック工業
+  company_slug: aquatech
+  description: 産業用機器とその消耗品を国内・海外の 2 チャネルで販売するメーカー
+  # 生成期間 (月次・両端含む)
+  start_ym: "2020-01"
+  end_ym: "2026-08"
+  # ハンズオン当日に投入する「新しい月」
+  holdout_ym: "2026-08"
+  # 乱数シードの基点。品目ごとに base_seed + index*1000 + attempt を使う
+  base_seed: 20260913
+  # 自己検証の許容誤差 (相対誤差)
+  tolerance:
+    adi: 0.25
+    cv2: 0.35
+    mean_qty: 0.20
+  # 在庫拠点
+  sites:
+    - code: TOKYO_DC
+      name: 東京物流センター
+      domestic: true
+    - code: OSAKA_DC
+      name: 大阪物流センター
+      domestic: true
+    - code: OVERSEAS_HUB
+      name: 海外中継倉庫
+      domestic: false
+
+channels:
+  - code: DOM
+    name: 国内
+    description: 国内の販売代理店・直販向けチャネル。需要は比較的安定している。
+  - code: EXP
+    name: 海外
+    description: 海外の現地代理店向けチャネル。先行注文により大口のスパイクが立つ。
+
+# -----------------------------------------------------------------------------
+# 品目マスタ
+# -----------------------------------------------------------------------------
+# K 系 = 計測ユニットとその派生型 / T 系 = 交換用センサモジュール
+#
+#   demand_class    : 需要分類 (上記参照)
+#   adi / cv2       : 目標値 (品目単位 = DOM + EXP 合計に対して検証する)
+#   mean_qty        : 直近 12 ヶ月の月次平均数量の目標値
+#   domestic_only   : true なら EXP チャネルの数量をゼロにする
+#   launch_ym       : この月から需要が立ち上がる (それ以前はゼロ)
+#   seasonal        : true なら年周期の季節性を付与する (モデル比較で差を出すため)
+#   exp_share       : EXP チャネルの数量シェア目標 (domestic_only=false のとき)
+# -----------------------------------------------------------------------------
+items:
+  # --- K210 系: 計測ユニット本体とその派生型 ---
+  - code: K210
+    name: 計測ユニット K210
+    category: 計測ユニット
+    item_type: 本体
+    unit_price: 185000
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.11
+    mean_qty: 27.2
+    domestic_only: false
+    exp_share: 0.28
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K210A
+    name: 計測ユニット K210A
+    category: 計測ユニット
+    item_type: 本体
+    unit_price: 198000
+    demand_class: smooth
+    adi: 1.17
+    cv2: 0.33
+    mean_qty: 2.3
+    domestic_only: false
+    exp_share: 0.30
+    launch_ym: "2022-04"
+    seasonal: false
+
+  - code: K210B
+    name: 計測ユニット K210B
+    category: 計測ユニット
+    item_type: 本体
+    unit_price: 210000
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.37
+    mean_qty: 49.8
+    domestic_only: false
+    exp_share: 0.22
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K210C
+    name: 計測ユニット K210C
+    category: 計測ユニット
+    item_type: 本体
+    unit_price: 225000
+    demand_class: lumpy_severe
+    adi: 1.00
+    cv2: 1.14
+    mean_qty: 28.0
+    domestic_only: false
+    exp_share: 0.35
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K210D
+    name: 計測ユニット K210D
+    category: 計測ユニット
+    item_type: 本体
+    unit_price: 240000
+    demand_class: lumpy
+    adi: 3.84
+    cv2: 1.08
+    mean_qty: 0.3
+    domestic_only: false
+    exp_share: 0.25
+    launch_ym: "2022-10"
+    seasonal: false
+
+  # --- K240 系: 携帯型計測ユニット ---
+  - code: K240
+    name: 携帯型計測ユニット K240
+    category: 携帯型計測ユニット
+    item_type: 本体
+    unit_price: 96000
+    demand_class: erratic
+    adi: 1.24
+    cv2: 0.81
+    mean_qty: 6.8
+    domestic_only: false
+    exp_share: 0.32
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K240B
+    name: 携帯型計測ユニット K240B
+    category: 携帯型計測ユニット
+    item_type: 本体
+    unit_price: 108000
+    demand_class: intermittent
+    adi: 1.83
+    cv2: 0.48
+    mean_qty: 1.6
+    domestic_only: false
+    exp_share: 0.20
+    launch_ym: "2021-07"
+    seasonal: false
+
+  # --- K250 系: 記録紙・消耗品 ---
+  - code: K250A
+    name: 記録紙 K250A
+    category: 記録紙
+    item_type: 消耗品
+    unit_price: 1200
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.07
+    mean_qty: 244.1
+    domestic_only: false
+    exp_share: 0.24
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K250B
+    name: 記録紙 K250B (国内仕様)
+    category: 記録紙
+    item_type: 消耗品
+    unit_price: 1350
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.27
+    mean_qty: 56.0
+    domestic_only: true
+    exp_share: 0.0
+    launch_ym: "2020-01"
+    seasonal: false
+
+  # --- K310 系: 電極パッド (主力消耗品) ---
+  - code: K310
+    name: 電極パッド K310
+    category: 電極パッド
+    item_type: 消耗品
+    unit_price: 480
+    demand_class: erratic
+    adi: 1.00
+    cv2: 0.16
+    mean_qty: 1387.8
+    domestic_only: false
+    exp_share: 0.30
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K311
+    name: 電極パッド K311
+    category: 電極パッド
+    item_type: 消耗品
+    unit_price: 520
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.05
+    mean_qty: 97.0
+    domestic_only: false
+    exp_share: 0.26
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K312
+    name: 電極パッド K312
+    category: 電極パッド
+    item_type: 消耗品
+    unit_price: 560
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.15
+    mean_qty: 21.9
+    domestic_only: false
+    exp_share: 0.18
+    launch_ym: "2020-01"
+    seasonal: false
+
+  # --- K350 系: 接続ケーブル (すべて国内専用) ---
+  - code: K350A
+    name: 接続ケーブル K350A
+    category: 接続ケーブル
+    item_type: 消耗品
+    unit_price: 8600
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.12
+    mean_qty: 10.2
+    domestic_only: true
+    exp_share: 0.0
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K350B
+    name: 接続ケーブル K350B
+    category: 接続ケーブル
+    item_type: 消耗品
+    unit_price: 9200
+    demand_class: smooth
+    adi: 1.01
+    cv2: 0.21
+    mean_qty: 2.2
+    domestic_only: true
+    exp_share: 0.0
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K350C
+    name: 接続ケーブル K350C
+    category: 接続ケーブル
+    item_type: 消耗品
+    unit_price: 9800
+    demand_class: smooth
+    adi: 1.03
+    cv2: 0.19
+    mean_qty: 12.5
+    domestic_only: true
+    exp_share: 0.0
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K350D
+    name: 接続ケーブル K350D
+    category: 接続ケーブル
+    item_type: 消耗品
+    unit_price: 10400
+    demand_class: erratic
+    adi: 1.00
+    cv2: 0.62
+    mean_qty: 12.5
+    domestic_only: true
+    exp_share: 0.0
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K350E
+    name: 接続ケーブル K350E
+    category: 接続ケーブル
+    item_type: 消耗品
+    unit_price: 11000
+    demand_class: smooth
+    adi: 1.03
+    cv2: 0.23
+    mean_qty: 18.0
+    domestic_only: true
+    exp_share: 0.0
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: K350F
+    name: 接続ケーブル K350F
+    category: 接続ケーブル
+    item_type: 消耗品
+    unit_price: 11600
+    demand_class: smooth
+    adi: 1.01
+    cv2: 0.27
+    mean_qty: 6.0
+    domestic_only: true
+    exp_share: 0.0
+    launch_ym: "2021-01"
+    seasonal: false
+
+  # --- T120 系: 交換用センサモジュール (大量出荷) ---
+  - code: T120
+    name: センサモジュール T120
+    category: センサモジュール
+    item_type: 消耗品
+    unit_price: 3400
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.19
+    mean_qty: 922.1
+    domestic_only: false
+    exp_share: 0.31
+    launch_ym: "2020-01"
+    # 季節性を持つ 2 品目のうちの 1 つ (モデル比較で差が出るように)
+    seasonal: true
+
+  - code: T121
+    name: センサモジュール T121
+    category: センサモジュール
+    item_type: 消耗品
+    unit_price: 3600
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.08
+    mean_qty: 747.1
+    domestic_only: false
+    exp_share: 0.27
+    launch_ym: "2020-01"
+    seasonal: false
+
+  - code: T122
+    name: センサモジュール T122
+    category: センサモジュール
+    item_type: 消耗品
+    unit_price: 3800
+    demand_class: erratic
+    adi: 1.00
+    cv2: 0.52
+    mean_qty: 437.9
+    domestic_only: false
+    exp_share: 0.33
+    launch_ym: "2020-01"
+    seasonal: false
+
+  # --- T240 系: 高精度センサモジュール ---
+  - code: T240
+    name: 高精度センサモジュール T240
+    category: センサモジュール
+    item_type: 消耗品
+    unit_price: 7200
+    demand_class: smooth
+    adi: 1.00
+    cv2: 0.13
+    mean_qty: 832.9
+    domestic_only: false
+    exp_share: 0.29
+    launch_ym: "2020-01"
+    # 季節性を持つ 2 品目のうちの 1 つ
+    seasonal: true
+
+  - code: T241
+    name: 高精度センサモジュール T241
+    category: センサモジュール
+    item_type: 消耗品
+    unit_price: 7800
+    demand_class: lumpy_severe
+    adi: 1.00
+    cv2: 1.24
+    mean_qty: 22.0
+    domestic_only: false
+    exp_share: 0.34
+    launch_ym: "2020-01"
+    seasonal: false
+
+# -----------------------------------------------------------------------------
+# 在庫・リードタイムの生成パラメータ
+# -----------------------------------------------------------------------------
+inventory:
+  # 安全在庫 = 直近 12 ヶ月の月次平均需要 × safety_stock_months
+  safety_stock_months: 1.5
+  # 月末在庫 = 安全在庫 × (1 + ノイズ)。ノイズの標準偏差
+  closing_qty_noise_sd: 0.45
+  # 欠品はこの確率で発生させる (月末在庫が 0 になる)
+  stockout_rate: 0.06
+
+lead_time:
+  # 拠点ごとの標準リードタイム日数のレンジ (一様分布・整数)
+  TOKYO_DC: [3, 10]
+  OSAKA_DC: [4, 12]
+  OVERSEAS_HUB: [21, 60]
