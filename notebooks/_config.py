@@ -38,19 +38,26 @@
 # MAGIC %md
 # MAGIC ## ⭐ 設定は `databricks.yml` の 1 箇所だけ
 # MAGIC
-# MAGIC ⭐ カタログ名・スキーマ名・Volume 名は、次の順に探して**最初に見つかったもの**を使います。
-# MAGIC ⚠️ **参加者がこのファイルを編集する必要はありません。**
+# MAGIC ## ⭐⭐ 書き換えるのは `_settings.py` の 1 行だけ
+# MAGIC
+# MAGIC ⭐ **講師から伝えられたカタログ名**を `notebooks/_settings.py` に入れてください。
+# MAGIC
+# MAGIC ```python
+# MAGIC CATALOG = "..."   # ★ ここに貼る
+# MAGIC ```
+# MAGIC
+# MAGIC ⚠️ **このファイル (`_config.py`) は触らないでください。**
+# MAGIC
+# MAGIC ### 読み込みの優先順位
 # MAGIC
 # MAGIC | 優先 | 読み込み元 | 誰が書くか |
 # MAGIC |---|---|---|
-# MAGIC | ⭐ 1 | `.databricks/bundle/dev/variable-overrides.json` | ⭐ **`admin/00_prepare_environment`** が書き出す |
-# MAGIC | 2 | `databricks.yml` の `variables` の `default` | リポジトリの既定値 |
-# MAGIC | 3 | このファイル内の `_FALLBACK` | 上の 2 つが読めなかったとき |
+# MAGIC | ⭐⭐ 1 | ⭐ **`notebooks/_settings.py`** | ⭐ **あなた**（講師から聞いた値） |
+# MAGIC | 2 | `.databricks/bundle/dev/variable-overrides.json` | 管理者（同じ Git フォルダのときだけ） |
+# MAGIC | 3 | `databricks.yml` の `variables` の `default` | リポジトリの既定値 |
+# MAGIC | 4 | ⚠️ 見本スキーマを持つカタログを自動で探す | 最後の保険 |
 # MAGIC
-# MAGIC ⚠️⚠️ **1 を見ないと事故ります。** 管理者が既定と違うカタログ名を使った場合、
-# MAGIC `databricks.yml` の既定値のままだと `NO_SUCH_CATALOG_EXCEPTION` になります。
-# MAGIC
-# MAGIC ⭐ どこから読んだかは下のセルが表示します。⚠️ **想定と違ったらそこを直してください。**
+# MAGIC ⭐ どこから読んだかは下のセルが表示します。
 
 # COMMAND ----------
 
@@ -125,19 +132,65 @@ def _read_overrides(path: str) -> dict:
     return {k: v for k, v in loaded.items() if isinstance(v, str) and v}
 
 
+# ⭐⭐ 参加者が書き換えるファイル。すべてより優先します。
+SETTINGS_PY = f"{_prefix}{_root}/notebooks/_settings.py"
+
+# `_settings.py` の名前 → bundle 変数名 の対応
+_SETTINGS_KEYS = {
+    "CATALOG": "catalog",
+    "SAMPLE_SCHEMA": "sample_schema",
+    "LANDING_VOLUME": "landing_volume",
+    "SCHEMA_PREFIX": "schema_prefix",
+}
+
+
+def _read_settings(path: str) -> dict:
+    """`_settings.py` から `NAME = "値"` を読む。
+
+    ⚠️ import ではなく**テキストとして**読みます。`%run` の入れ子や
+    sys.path の設定に依存させないためです。
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return {}
+
+    out: dict[str, str] = {}
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#") or "=" not in stripped:
+            continue
+        name, _, value = stripped.partition("=")
+        key = _SETTINGS_KEYS.get(name.strip())
+        if not key:
+            continue
+        # 行末コメントを落として引用符を外す
+        value = value.split("#")[0].strip().strip('"').strip("'")
+        if value:
+            out[key] = value
+    return out
+
+
 _yaml_vars = _read_bundle_variables(BUNDLE_YAML)
 _override_vars = _read_overrides(OVERRIDE_JSON)
+_settings_vars = _read_settings(SETTINGS_PY)
 
-# ⭐ 上書きファイルが勝つ
-_vars = {**_yaml_vars, **_override_vars}
+# ⭐ _settings.py > 上書きファイル > databricks.yml
+_vars = {**_yaml_vars, **_override_vars, **_settings_vars}
 
-if _override_vars:
-    print(f"⭐ 設定の読み込み元: {OVERRIDE_JSON}")
-    print(f"   （管理者が書き出した上書き: {', '.join(sorted(_override_vars))}）")
-elif _yaml_vars:
-    print(f"設定の読み込み元: {BUNDLE_YAML}")
+if _settings_vars.get("catalog"):
+    print(f"⭐ カタログの指定元: {SETTINGS_PY}")
+    print(f"   CATALOG = {_settings_vars['catalog']}")
+elif _override_vars.get("catalog"):
+    print(f"⭐ カタログの指定元: {OVERRIDE_JSON}（管理者が書き出したもの）")
+elif _yaml_vars.get("catalog"):
+    print(f"⚠️ カタログの指定元: {BUNDLE_YAML} の既定値")
+    print("   ⭐ 本来は notebooks/_settings.py の CATALOG に、")
+    print("      講師から伝えられたカタログ名を入れてください。")
 else:
-    print(f"⚠️ {BUNDLE_YAML} が読めなかったので既定値を使います")
+    print("⚠️ カタログの指定が見つかりませんでした。")
+    print("   ⭐ notebooks/_settings.py の CATALOG に、講師から伝えられた名前を入れてください。")
 
 # ハンズオンで使うカタログ名
 DEFAULT_CATALOG = _vars.get("catalog") or _FALLBACK["catalog"]
@@ -146,8 +199,8 @@ SAMPLE_SCHEMA = _vars.get("sample_schema") or _FALLBACK["sample_schema"]
 # CSV を置く Volume 名（見本にも、あなたのスキーマにも同じ名前で作ります）
 LANDING_VOLUME = _vars.get("landing_volume") or _FALLBACK["landing_volume"]
 
-# 参加者ごとのスキーマ名のプレフィックス
-SCHEMA_PREFIX = "fc_ws"
+# 参加者ごとのスキーマ名のプレフィックス（`_settings.py` で変えられます）
+SCHEMA_PREFIX = _vars.get("schema_prefix") or "fc_ws"
 # False にすると全員が 1 つのスキーマを共有する（一人でデモするとき用）
 SCHEMA_PER_USER = True
 
@@ -223,13 +276,13 @@ def _resolve_catalog(name: str) -> str:
 
     if len(hits) == 1:
         print(f"⭐ カタログ {hits[0]} を使います（{SAMPLE_SCHEMA} が見つかりました）。")
-        print("⚠️ 設定ファイルの値と違っています。講師に伝えてください。")
+        print("⚠️ 指定された名前と違います。notebooks/_settings.py の CATALOG を直してください。")
         return hits[0]
 
     raise RuntimeError(
         f"カタログ {name} が見つかりません。"
         + (f" 候補が複数あります: {hits}。" if len(hits) > 1 else "")
-        + " 講師に正しいカタログ名を確認し、ノートブック上部の widget『カタログ』に入れてください。"
+        + " ⭐ 講師に正しいカタログ名を確認し、notebooks/_settings.py の CATALOG に入れてください。"
     )
 
 

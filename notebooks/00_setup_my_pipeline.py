@@ -69,6 +69,27 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ## ⭐⭐ 最初にやること — カタログ名を 1 行入れる
+# MAGIC
+# MAGIC ⚠️ **これをやらないと、この先すべてが「カタログが見つかりません」で止まります。**
+# MAGIC
+# MAGIC 1. 左のファイル一覧から **`notebooks/_settings.py`** を開く
+# MAGIC 2. ⭐ **講師から伝えられたカタログ名**を貼る
+# MAGIC
+# MAGIC    ```python
+# MAGIC    CATALOG = "..."   # ★ ここ
+# MAGIC    ```
+# MAGIC
+# MAGIC 3. **保存**して、このノートブックに戻って下から順に実行
+# MAGIC
+# MAGIC ⭐ 書き換えるのはこの 1 行だけです。⚠️ 他のファイルは触らないでください。
+# MAGIC
+# MAGIC > ⭐ **自分のスキーマ名は入れなくていい**です。
+# MAGIC > ログインユーザー名から `fc_ws_<あなた>` が自動で作られます。
+
+# COMMAND ----------
+
 # MAGIC %run ./_config
 
 # COMMAND ----------
