@@ -3,8 +3,12 @@
 ⭐ 数字の表だけだと「率と個数で結論が変わる」ような話が伝わりにくいため、
 グラフを添えるための小さなヘルパーをまとめています。
 
-⚠️ Databricks のノートブックでは、`plt.show()` の代わりに
-そのまま図を返せば表示されます（`display(fig)` でも可）。
+⚠️⚠️ **各関数は返す前に `plt.close(fig)` します。**
+
+Databricks のノートブックは、セルが終わった時点で**開いている figure を自動で描画**します。
+そこに呼び出し側の `display(fig)` が重なると、⚠️ **同じグラフが 2 回出ます**。
+⭐ 閉じておけば自動描画の対象から外れ、`display(fig)` の 1 回だけになります。
+（閉じた figure でも `display()` は描画できます。）
 """
 
 from __future__ import annotations
@@ -55,6 +59,8 @@ def plot_series_with_forecast(
     ax.set_ylabel("quantity")
     ax.grid(alpha=0.25)
     ax.legend(loc="upper left", frameon=False)
+    # ⚠️ 二重描画を防ぐ（理由はこのファイル冒頭の説明を参照）
+    plt.close(fig)
     return fig
 
 
@@ -84,6 +90,8 @@ def plot_grouped_bars(
     ax.set_ylabel(ylabel)
     ax.grid(axis="y", alpha=0.25)
     ax.legend(frameon=False)
+    # ⚠️ 二重描画を防ぐ（理由はこのファイル冒頭の説明を参照）
+    plt.close(fig)
     return fig
 
 
@@ -114,6 +122,8 @@ def plot_pred_vs_actual(
     ax.set_title(title)
     ax.grid(alpha=0.25)
     ax.legend(frameon=False)
+    # ⚠️ 二重描画を防ぐ（理由はこのファイル冒頭の説明を参照）
+    plt.close(fig)
     return fig
 
 
@@ -138,4 +148,6 @@ def plot_error_over_time(
     ax.set_ylabel(ylabel)
     ax.grid(alpha=0.25)
     ax.legend(frameon=False)
+    # ⚠️ 二重描画を防ぐ（理由はこのファイル冒頭の説明を参照）
+    plt.close(fig)
     return fig
