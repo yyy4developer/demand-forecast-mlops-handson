@@ -204,6 +204,9 @@ displayHTML(
 
 # COMMAND ----------
 
+# ⚠️ 前のセルを飛ばしていても動くようにしておく
+_before = globals().get("_before", [])
+
 files = sorted(os.listdir(f"{LANDING_PATH}/shipments"))
 print("出荷実績ファイル:")
 for f in files:
