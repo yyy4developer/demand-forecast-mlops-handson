@@ -102,6 +102,23 @@ databricks workspace import skills/assistant_instructions.md \
 ⚠️ MMF は Databricks の正式サポート対象外（AS-IS）で、**DBR 18 for ML 以上**が必要です。
 ⭐ CPU だけで動くモデルに絞れば GPU は不要です。
 
+## STEP 8.5 — ⭐ 見本ジョブを一度動かしておく
+
+⭐ `07_jobs` の答え合わせ用に、動くお手本を用意してあります。
+
+```bash
+# ① 初回だけ: 本番モデル（@champion）を作る
+databricks bundle run initial_train_sample -t dev -p <profile> --var warehouse_id=<id>
+
+# ② 月次サイクルを通しで動かす（CSV 取り込み → パイプライン → 再学習 → 予測と評価）
+databricks bundle run monthly_forecast_cycle_sample -t dev -p <profile> --var warehouse_id=<id>
+```
+
+⚠️ **順番が大事です。** ② は「今の本番と比べる」処理なので、① を先に実行して
+比べる相手を作っておかないと失敗します。
+
+⭐ 実測 **5 分半**で 4 タスクが通ります。
+
 ## STEP 9 — 当日直前のウォームアップ
 
 - [ ] SQL ウェアハウスを起動しておく

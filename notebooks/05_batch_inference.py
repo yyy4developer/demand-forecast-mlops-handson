@@ -145,7 +145,77 @@ print(f"✅ {MY}.fct_forecast_model に {sdf.count():,} 行を書き出しまし
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4. ⭐⭐ 「モデル」と「去年と同じ」を並べて比べる
+# MAGIC ## 4. ⭐⭐ 評価テーブルを更新する
+# MAGIC
+# MAGIC ⚠️ ここまでで予測は作りましたが、**「当たったかどうか」がテーブルに残っていません。**
+# MAGIC ⭐ 予測と実績を突き合わせた結果を、**すべての予測手法をまとめて 1 つのテーブル**に
+# MAGIC 書き出します。
+# MAGIC
+# MAGIC ```
+# MAGIC   fct_forecast_baseline  （去年と同じ）    ┐
+# MAGIC   fct_forecast_model     （自作モデル）    ├─▶ fct_forecast_accuracy_all
+# MAGIC   fct_forecast_ai        （ai_forecast）  ┘        ↑ 実績と突き合わせ済み
+# MAGIC ```
+# MAGIC
+# MAGIC ⭐ **これがあると「毎月、精度が自動で記録される」状態になります。**
+# MAGIC ⚠️ ここを作らないと、精度は誰かが手でクエリを書いたときにしか分かりません。
+# MAGIC 「気づいたら 3 か月ずれ続けていた」が起きるのはこの穴です。
+
+# COMMAND ----------
+
+# 存在する予測テーブルだけを対象にする（03 を飛ばした場合でも動くように）
+sources = []
+for tbl in ("fct_forecast_baseline", "fct_forecast_model", "fct_forecast_ai"):
+    if spark.catalog.tableExists(f"{MY}.{tbl}"):
+        sources.append(tbl)
+    else:
+        print(f"⏭  {tbl} は無いので対象外")
+
+union_sql = " UNION ALL ".join(
+    f"SELECT item_code, channel, target_ym, model_name, p50, "
+    f"       lower_bound, upper_bound FROM {MY}.{s}"
+    for s in sources
+)
+
+spark.sql(f"""
+    CREATE OR REPLACE TABLE {MY}.fct_forecast_accuracy_all AS
+    WITH all_forecasts AS ({union_sql})
+    SELECT
+      f.item_code,
+      f.channel,
+      f.target_ym,
+      f.model_name,
+      f.p50                              AS forecast_qty,
+      a.qty                              AS actual_qty,
+      abs(a.qty - f.p50)                 AS abs_error,
+      CASE WHEN a.qty > 0 THEN abs(a.qty - f.p50) / a.qty END AS ape,
+      CASE WHEN a.qty BETWEEN f.lower_bound AND f.upper_bound THEN 1 ELSE 0 END AS within_interval
+    FROM all_forecasts f
+    INNER JOIN {MY}.fct_shipments a
+      ON  f.item_code = a.item_code
+      AND f.channel   = a.channel
+      AND f.target_ym = a.ym
+""")
+spark.sql(f"COMMENT ON TABLE {MY}.fct_forecast_accuracy_all IS "
+          f"'すべての予測手法を実績と突き合わせた結果。手法ごとの精度を同じ条件で比べられる。'")
+
+print(f"✅ {MY}.fct_forecast_accuracy_all を更新しました "
+      f"({spark.table(f'{MY}.fct_forecast_accuracy_all').count():,} 行 / 対象 {len(sources)} 手法)")
+display(spark.sql(f"""
+    SELECT model_name AS `予測手法`,
+           ROUND(AVG(abs_error), 2)            AS `平均誤差_個数`,
+           ROUND(AVG(ape) * 100, 1)            AS `平均誤差率_pct`,
+           ROUND(AVG(within_interval) * 100, 1) AS `区間的中率_pct`,
+           COUNT(*)                            AS `件数`
+    FROM {MY}.fct_forecast_accuracy_all
+    GROUP BY model_name
+    ORDER BY `平均誤差_個数`
+"""))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 5. ⭐⭐ 「モデル」と「去年と同じ」を並べて比べる
 # MAGIC
 # MAGIC ⭐ **ここが今日いちばん大事なクエリです。**
 # MAGIC
@@ -226,7 +296,7 @@ print(f"✅ {MY}.fct_forecast_model に {sdf.count():,} 行を書き出しまし
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 5. ⭐ グラフで見る
+# MAGIC ## 6. ⭐ グラフで見る
 # MAGIC
 # MAGIC 表の数字だけだと差が実感しにくいので、**同じ内容をグラフにします**。
 

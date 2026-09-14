@@ -1,0 +1,93 @@
+# 見本の月次ジョブ（参加者が 07 で自分の手で組むものの「答え」）
+#
+# ⭐ 参加者は `07_jobs` で画面からこれと同じものを組みます。
+#    ここに置いてあるのは、動くお手本として先に見せる / 答え合わせに使うためです。
+#
+# ⭐⭐ このジョブが「毎月やること」の全部です。人がやるのは CSV を置くことだけ。
+#
+#   ① CSV を取り込む      新しい月の CSV を Volume に置く
+#         ↓
+#   ② パイプラインを回す   bronze → silver → gold が更新される
+#         ↓
+#   ③ モデルを更新する     再学習し、本番より良ければ入れ替える（悪ければ据え置き）
+#         ↓
+#   ④ 予測と評価を更新する 予測を作り直し、精度をテーブルに記録する
+#
+# ⚠️ 前提: 一度だけ `04_train_register` を実行して本番モデル（@champion）を
+#    作っておく必要があります。③ は「今の本番と比べる」処理なので、
+#    比べる相手がいないと失敗します。
+#
+# ⚠️ 見本は共有の見本スキーマ (fc_sample) に対して動きます。
+#    参加者は自分のスキーマに対して同じものを組みます。
+resources:
+  jobs:
+    monthly_forecast_cycle_sample:
+      name: "[handson] 見本 需要予測の月次更新"
+      # ⭐ 失敗したら気づけるようにする。自動化でいちばん怖いのは
+      #    「止まっているのに誰も気づかない」ことです。
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      queue:
+        enabled: true
+      # ⚠️ 既定では止めています。実運用では毎月 1 日などに設定します。
+      schedule:
+        quartz_cron_expression: "0 0 6 1 * ?"
+        timezone_id: "Asia/Tokyo"
+        pause_status: PAUSED
+
+      tasks:
+        # ① 新しい月の CSV を Volume に置く
+        - task_key: load_new_csv
+          notebook_task:
+            notebook_path: ../src/setup/load_csv_to_volume.py
+            base_parameters:
+              bundle_file_path: ${workspace.file_path}
+              catalog: ${var.catalog}
+              schema: ${var.shared_schema}
+              volume: ${var.landing_volume}
+              # ⭐ 当日は "B"（新しい月）。運用では毎月の新ファイルを置く処理に置き換えます。
+              load_set: "B"
+
+        # ② パイプラインを回して bronze → silver → gold を更新
+        - task_key: refresh_tables
+          depends_on:
+            - task_key: load_new_csv
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.medallion_sample.id}
+
+        # ③ 再学習して、良ければ本番を入れ替える
+        - task_key: retrain_and_promote
+          depends_on:
+            - task_key: refresh_tables
+          notebook_task:
+            notebook_path: ../notebooks/06_retrain.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.sample_schema}
+
+        # ④ 予測を作り直し、精度をテーブルに記録する
+        - task_key: score_and_evaluate
+          depends_on:
+            - task_key: retrain_and_promote
+          notebook_task:
+            notebook_path: ../notebooks/05_batch_inference.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.sample_schema}
+
+    # 初回だけ実行するジョブ（本番モデルを作る）
+    #
+    # ⚠️ 上の月次ジョブは「今の本番と比べる」処理なので、
+    #    比べる相手（@champion）が無いと動きません。最初に 1 回これを回します。
+    initial_train_sample:
+      name: "[handson] 見本 初回のモデル作成（1 回だけ）"
+      queue:
+        enabled: true
+      tasks:
+        - task_key: train
+          notebook_task:
+            notebook_path: ../notebooks/04_train_register.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.sample_schema}
