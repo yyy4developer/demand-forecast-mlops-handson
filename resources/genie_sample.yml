@@ -19,6 +19,26 @@
 #
 # ⭐ ここでは **YAML にインラインで書いています**（別ファイルにすると
 #    `${var.catalog}` などの変数が置換されないため）。
+#
+# ⚠️⚠️⚠️ **1 回目の deploy ではこのリソースだけ失敗します。想定どおりです。**
+#
+#   Genie Agent の作成 API は、参照するテーブルが **実在するか検証します**。
+#   ところが `mv_demand` / `mv_forecast_accuracy` は
+#
+#     deploy → CSV 投入 → パイプライン実行 → gold テーブル → メトリクスビュー
+#
+#   という順でできるので、⚠️ **deploy の時点では存在しません**。
+#   そのため 1 回目は次のエラーになります（403 PERMISSION_DENIED という
+#   表示ですが、⭐ 中身は「テーブルが無い」です）:
+#
+#     Failed to fetch tables for the agent.
+#     Table '<catalog>.fc_sample.mv_demand' does not exist
+#
+#   ⭐ **他のリソース（スキーマ / Volume / パイプライン / ジョブ / ダッシュボード）は
+#      1 回目で全部作られます。** 権限付与も効きます。
+#
+# ⭐⭐ **対処: メトリクスビューを作ってから、もう一度 deploy してください。**
+#    手順は `docs/SETUP.md` の STEP 6.5 にあります。
 resources:
   genie_spaces:
     demand_agent_sample:

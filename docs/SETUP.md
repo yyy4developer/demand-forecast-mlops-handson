@@ -18,10 +18,12 @@
               └─ カタログ / SQL ウェアハウス / 権限 / 変数ファイル
    STEP 3  ⭐ 画面から「デプロイ」          ← 渡す値なし
               └─ ここで作られるのは「器」。データはまだ入っていません
+              └─ ⚠️ Genie Agent だけ失敗します（想定どおり / STEP 6.5 で作ります）
    STEP 4  サンプルデータを Volume に投入（load_set = A）
    STEP 5  見本パイプラインを実行
    STEP 6  _uc_metadata を schema = fc_sample で実行
-   STEP 7  Genie Agent の確認（デプロイ済み）
+   STEP 6.5 ⭐⭐ もう一度デプロイ  ← ここで初めて Genie Agent が作られる
+   STEP 7  ダッシュボード / Genie Agent に CAN VIEW を付ける
    STEP 8  MMF の参考結果を作る / 初回モデルを作る
    STEP 9  当日直前のウォームアップ
    STEP 10 ⭐ 参加者 1 名で通しリハーサル
@@ -144,6 +146,26 @@ Git フォルダにこのリポジトリを取り込み、画面から bundle �
 2. 画面に出る **「デプロイ」** を押す
 3. ⭐ **渡す値はありません。** そのままデプロイできます
 
+> ⚠️⚠️⚠️ **1 回目は Genie Agent だけ失敗します。想定どおりなので進んでください。**
+>
+> ```
+> Error: cannot create resources.genie_spaces.demand_agent_sample:
+>   Failed to fetch tables for the agent.
+>   Table '<catalog>.fc_sample.mv_demand' does not exist  (403 PERMISSION_DENIED)
+> ```
+>
+> ⭐ Genie Agent の作成 API は**参照テーブルが実在するかを検証します**。
+> ところが `mv_demand` / `mv_forecast_accuracy` は
+> **デプロイ → CSV 投入 → パイプライン実行 → gold → メトリクスビュー**
+> の順にできるので、⚠️ デプロイの時点では存在しません。
+>
+> ⚠️ `403 PERMISSION_DENIED` と出ますが、**権限の問題ではありません**（中身は「テーブルが無い」）。
+>
+> ⭐⭐ **他のリソースは 1 回目で全部作られます**（実機で確認済み）:
+> スキーマ / Volume / パイプライン / ジョブ 3 本 / ダッシュボード / ⭐ **権限付与も**。
+>
+> ⭐ Genie Agent は **STEP 6.5 でもう一度デプロイ**すると作られます。
+
 ⭐ 作られるもの: 見本スキーマ `fc_sample` / その Volume `landing` /
 データ投入ジョブ / 見本パイプライン / ⭐ **見本ダッシュボード** /
 見本の月次ジョブ / 初回モデル作成ジョブ
@@ -193,14 +215,48 @@ SHOW GRANTS ON VOLUME <catalog>.fc_sample.landing;  -- READ VOLUME
 
 ⚠️ これを飛ばすと、見本 Genie Agent の回答精度が出ません。
 
+## STEP 6.5 — ⭐⭐ もう一度デプロイして Genie Agent を作る
+
+⭐ **STEP 6 でメトリクスビューができたので、ここで初めて Genie Agent が作れます。**
+
+1. Git フォルダの **`databricks.yml` があるフォルダ**を開く
+2. **「デプロイ」** をもう一度押す
+
+⭐ 今度は成功します。作られるのは Genie Agent 1 つだけで、
+他のリソースは変更なしとして扱われます。
+
+### ⭐ 成功したか確認する
+
+```bash
+databricks api get "/api/2.0/genie/spaces?page_size=20" -p <profile>
+```
+
+⭐ `[handson] 見本 需要分析エージェント` が 1 件返れば完了です。
+
+> ⚠️ ここで失敗する場合は、STEP 6 のメトリクスビューが本当にできているか確認してください。
+>
+> ```sql
+> SHOW TABLES IN <catalog>.fc_sample LIKE 'mv_*';   -- mv_demand / mv_forecast_accuracy
+> ```
+
+> 💡 **なぜ 2 回に分かれるのか（設計上の制約）**
+>
+> Genie Agent は参照テーブルの実在を要求し、そのテーブルはデプロイが作った
+> パイプラインを**実行してから**できます。⚠️ 1 回のデプロイでは順序を満たせません。
+> ⭐ Genie Agent を bundle の外（ノートブックから REST で作成）に出せば 1 回で済みますが、
+> ⭐ **「Genie Agent も DAB で管理できる」ことを示すため** bundle に残しています。
+
+---
+
 ## STEP 7 — 見本のダッシュボードと Genie Agent
 
-⭐⭐ **どちらも STEP 3 のデプロイで既に作られています。** 作業は不要です。
+⭐ **ダッシュボードは STEP 3 のデプロイで、Genie Agent は STEP 6.5 のデプロイで作られています。**
+作成作業は不要です。
 
 ⚠️ **参加者グループに `CAN VIEW` を付けてください**（それぞれの画面の「共有」から）。
 ⚠️ どちらも**開いた人の権限**でクエリを実行するため、
 参加者が見本スキーマを読めないと開いてもエラーになります
-（STEP 2 の GRANT で付与済みのはずです）。
+（⭐ **STEP 3 のデプロイ**が `USE SCHEMA` / `SELECT` を付けています）。
 
 > ⭐ Genie Agent の定義（`resources/genie_sample.yml`）は公開ドキュメントに形式が無く、
 > API を試して特定しました。要点は同ファイルのコメントに書いてあります。
@@ -282,7 +338,7 @@ databricks api post "/api/2.0/pipelines/<pipeline_id>/updates" --json '{"full_re
 `HANDSON.md` を上から読み、書かれている通りにだけ操作して最後まで通してください。
 
 - [ ] 各 Part の所要時間を実測する
-- [ ] 権限エラーが出た箇所を STEP 2 の GRANT に反映する
+- [ ] 権限エラーが出た箇所を反映する（カタログ＝`00` / スキーマ・Volume＝bundle の `grants:`）
 - [ ] ⚠️ ML 系ノートブック（`04`〜`06`）で **環境バージョンが 5 になっているか**確認する
 
 ---
