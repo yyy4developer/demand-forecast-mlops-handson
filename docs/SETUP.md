@@ -15,30 +15,66 @@
 - [ ] ⚠️ 参加者が **サーバーレスコンピュート**を使える
 - [ ] ⚠️ 参加者が **パイプラインを作成できる**（`00_setup_my_pipeline` で各自が自分のパイプラインを作ります）
 
-## STEP 1 — 認証
+## ⭐⭐ Databricks CLI は必要ありません
 
-```bash
-databricks auth login --host <workspace-url> --profile <profile>
-```
+⭐ **ワークスペースの画面だけで完結します。**
+Git フォルダにこのリポジトリを取り込み、画面から bundle をデプロイします。
 
-## STEP 2 — ⚠️ カタログを作る（bundle より先に）
+| 前提 | 内容 |
+|---|---|
+| ワークスペースファイル | 有効になっていること |
+| ⭐ **サーバーレスコンピュート** | ⭐ **有効になっていること**（画面からのデプロイに必要） |
+| Git フォルダ | このリポジトリを clone できること |
 
-⚠️ **順番を逆にすると失敗します。**
+⚠️ **`databricks.yml` を Python で書いた bundle は画面からデプロイできません。**
+このリポジトリは YAML だけなので問題ありません。
 
-ノートブック `notebooks/admin/00_prepare_environment` を実行してください。
-カタログ作成と参加者への権限付与をまとめて行います。
+## STEP 1 — Git フォルダにリポジトリを取り込む
+
+1. 左メニュー **「ワークスペース」** → 右上 **「作成」** → **「Git フォルダ」**
+2. このリポジトリの URL を入れて作成
+
+## STEP 2 — ⚠️⚠️ 環境準備のノートブックを先に実行する
+
+⚠️ **デプロイより先に実行してください。** 順番を逆にすると失敗します。
+
+ノートブック **`notebooks/admin/00_prepare_environment`** を実行します。
+これ 1 本で、デプロイに必要なものが全部揃います。
+
+| # | 作られるもの |
+|---|---|
+| 1 | ⭐ **カタログ** |
+| 2 | ⭐ **SQL ウェアハウス**（無ければ Pro + サーバーレスで新規作成） |
+| 3 | ⭐ **参加者グループへの権限**（カタログ / 見本スキーマ / Volume / ウェアハウス） |
+| 4 | ⭐ **デプロイ準備状況のサマリ**（何が揃ったか / 渡す値は無いこと） |
 
 > ⚠️ **なぜ bundle でカタログを作らないのか**
 >
 > Default Storage 構成のメタストアでは、API 経由の `CREATE CATALOG` が
 > 「storage root がない」と言って失敗します。SQL 経由なら保存先が自動で決まるため通ります。
 
-## STEP 3 — bundle をデプロイ
+> ⭐ **なぜウェアハウスをここで作るのか**
+>
+> ダッシュボードは SQL ウェアハウスの ID を必要としますが、ID はワークスペースごとに違います。
+> ⚠️ bundle に書くと「デプロイ時に ID を渡す」必要が出て、**画面からのデプロイができなくなります**。
+> ⭐ だからウェアハウスはここで用意し、ダッシュボードは
+> `notebooks/admin/01_deploy_dashboard` が実行時に ID を見つけて作ります。
 
-```bash
-databricks bundle validate -t dev -p <profile>
-databricks bundle deploy   -t dev -p <profile>
-```
+## STEP 3 — ⭐ 画面から bundle をデプロイする
+
+1. Git フォルダの中の **`databricks.yml` があるフォルダ**を開く
+2. 画面に出る **「デプロイ」** を押す
+3. ⭐ **渡す値はありません。** そのままデプロイできます
+
+⭐ 作られるもの: 見本スキーマ `fc_sample` / その Volume `landing` /
+データ投入ジョブ / 見本パイプライン / 見本の月次ジョブ / 初回モデル作成ジョブ
+
+> 💡 CLI を持っている場合は次でも同じです（CI/CD や別ワークスペースへの配置はこちら）。
+>
+> ```bash
+> databricks bundle validate -t dev -p <profile>
+> databricks bundle deploy   -t dev -p <profile>
+> ```
 
 作られるもの: 見本スキーマ `fc_sample` / その Volume `landing` /
 データ投入ジョブ / 見本用パイプライン / 見本ダッシュボード / 見本の月次ジョブ
@@ -67,21 +103,25 @@ databricks bundle deploy   -t dev -p <profile>
 
 ⚠️ これを飛ばすと、見本 Genie Agent の回答精度が出ません。
 
-## STEP 7 — 見本のダッシュボードと Genie Agent を作る
+## STEP 7 — 見本のダッシュボードと Genie Agent
 
-⚠️ **画面から手で作ります**（自動化できません）。
+### ⭐ ダッシュボード — ノートブックで作れます
 
-1. `fc_sample` を参照するダッシュボードを作り、名前に **「見本」** を入れる
-   （`01_dashboard` が名前で探します）
-2. `fc_sample.mv_demand` と `fc_sample.mv_forecast_accuracy` を渡した Genie Agent を作り、
-   名前に **「見本」** を入れる
-3. どちらも参加者グループに **`CAN VIEW`** を付ける
+ノートブック **`notebooks/admin/01_deploy_dashboard`** を実行してください。
+⭐ SQL ウェアハウスを自分で見つけ、テーブル名にカタログとスキーマを補って作成・公開します。
+⭐ 何度実行しても安全です（既にあれば更新）。
 
-⭐ 作ったあと、リポジトリに取り込んでおくと次回から配布できます。
+⚠️ 作成後、参加者グループに **`CAN VIEW`** を付けてください（画面の「共有」から）。
+
+### ⚠️ Genie Agent — 画面から手で作ります
+
+⚠️ Genie Agent は定義の形式が公開されていないため、自動作成できません。
+手順と貼り付け用の下書きは [`genie/README.md`](../genie/README.md) にあります。
+
+⭐ 作ったあとリポジトリに取り込めば、次回から配れます（CLI がある場合）。
 
 ```bash
-databricks bundle generate dashboard   --existing-path "<見本ダッシュボードのパス>" --key demand_overview
-databricks bundle generate genie-space --key demand_agent
+databricks bundle generate genie-space --key demand_agent_sample
 ```
 
 ## STEP 8 — MMF のスキルを配置（`08` を触らせる場合）

@@ -15,9 +15,13 @@
 #   databricks bundle validate -t dev -p <profile>
 #   databricks bundle deploy   -t dev -p <profile>
 #
-# ワークスペースの URL は **プロファイルから解決される**ため、ここには書かない。
-# 別のワークスペースで使う場合は `databricks auth login` でプロファイルを作り、
-# `-p <profile>` を差し替えるだけでよい。
+# ⭐⭐ この bundle は **変数を 1 つも渡さずにデプロイできます。**
+#    Databricks CLI を持っていなくても、ワークスペース上の Git フォルダから
+#    画面の「デプロイ」だけで配置できます（docs/SETUP.md 参照）。
+#
+# ⚠️ SQL ウェアハウス ID のように環境ごとに変わる値は、ここでは扱いません。
+#    ダッシュボードは `notebooks/admin/01_deploy_dashboard` が
+#    実行時にウェアハウスを見つけて作ります。
 # =============================================================================
 
 bundle:
@@ -36,13 +40,6 @@ variables:
   participant_group:
     description: "参加者グループ名 (権限付与の対象)"
     default: handson-participants
-  warehouse_id:
-    # ⚠️ 環境ごとに異なるため既定値は空にしています。
-    #    デプロイ時に渡してください:
-    #      databricks bundle deploy -t dev -p <profile> --var warehouse_id=<id>
-    #    ID は `databricks warehouses list` で確認できます。
-    description: "ダッシュボードが使う SQL ウェアハウス ID"
-    default: ""
 
 include:
   - resources/*.yml
