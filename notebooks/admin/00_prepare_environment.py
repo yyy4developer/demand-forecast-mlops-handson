@@ -161,25 +161,46 @@ BUNDLE_TARGET = "dev"
 OVERRIDE_DIR = f"{_prefix}{REPO_ROOT}/.databricks/bundle/{BUNDLE_TARGET}"
 OVERRIDE_PATH = f"{OVERRIDE_DIR}/variable-overrides.json"
 
-overrides = {"warehouse_id": WAREHOUSE_ID}
+# ⭐⭐ このノートブックが使った値を **すべて** 書き出します。
+#
+# ⚠️ ここを warehouse_id だけにしてはいけません。
+#    上のウィジェットでカタログ名を変えたのに、この書き出しが warehouse_id だけだと
+#    デプロイは databricks.yml の **既定のカタログ名**を使い、
+#    「そんなカタログは無い」というエラーになります。
+#
+# ⚠️ ウィジェット名と bundle の変数名が 1 か所だけ違います:
+#    ウィジェット `volume` → bundle 変数 `landing_volume`
+overrides = {
+    "catalog": catalog,
+    "warehouse_id": WAREHOUSE_ID,
+    "sample_schema": sample_schema,
+    "landing_volume": volume,
+    "participant_group": group,
+}
 
 try:
     os.makedirs(OVERRIDE_DIR, exist_ok=True)
     with open(OVERRIDE_PATH, "w", encoding="utf-8") as f:
         json.dump(overrides, f, ensure_ascii=False, indent=2)
         f.write("\n")
-    print(f"✅ 変数の上書きファイルを書き出しました:")
+    print("✅ 変数の上書きファイルを書き出しました:")
     print(f"   {OVERRIDE_PATH}")
-    print(f"   {json.dumps(overrides, ensure_ascii=False)}")
+    print()
+    print("   デプロイがこの値を使います:")
+    for k, v in overrides.items():
+        print(f"     {k:<20} {v}")
     print()
     print("⭐ これでデプロイ時に渡す値はありません。画面の「デプロイ」を押すだけです。")
+    print("⚠️ ウィジェットの値を変えたら、このセルをもう一度実行してください。")
 except OSError as e:
     print(f"⚠️ 書き出せませんでした: {e}")
     print()
     print("⭐ 代わりに、デプロイのときに次のようにしてください:")
-    print(f"   ・画面のデプロイ: `databricks.yml` の warehouse_id の default を")
-    print(f"     \"{WAREHOUSE_ID}\" に書き換える")
-    print(f"   ・CLI: --var warehouse_id={WAREHOUSE_ID}")
+    print("   ・画面のデプロイ: `databricks.yml` の各変数の default を次の値に書き換える")
+    for k, v in overrides.items():
+        print(f"       {k:<20} {v}")
+    print("   ・CLI:")
+    print("       " + " ".join(f"--var {k}={v}" for k, v in overrides.items()))
 
 # COMMAND ----------
 
