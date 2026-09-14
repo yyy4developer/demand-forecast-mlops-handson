@@ -7,6 +7,47 @@
 
 ---
 
+## ⭐ 全体の順番（先に眺めてください）
+
+```
+⚠️ STEP 0  参加者グループを「アカウントレベル」で作る（アカウント管理者）
+              └─ 00 では作れません。ここだけ先に依頼が必要です
+
+   STEP 1  Git フォルダにこのリポジトリを clone
+   STEP 2  notebooks/admin/00_prepare_environment を実行
+              └─ カタログ / SQL ウェアハウス / 権限 / 変数ファイル
+   STEP 3  ⭐ 画面から「デプロイ」          ← 渡す値なし
+              └─ ここで作られるのは「器」。データはまだ入っていません
+   STEP 4  サンプルデータを Volume に投入（load_set = A）
+   STEP 5  見本パイプラインを実行
+   STEP 6  _uc_metadata を schema = fc_sample で実行
+   STEP 7  Genie Agent の確認（デプロイ済み）
+   STEP 8  MMF の参考結果を作る / 初回モデルを作る
+   STEP 9  当日直前のウォームアップ
+   STEP 10 ⭐ 参加者 1 名で通しリハーサル
+```
+
+⚠️⚠️ **STEP 3 のデプロイでデータは入りません。** STEP 4〜8 が必要です。
+
+## ⭐ 設定ファイルを触る必要はありません
+
+⭐ カタログ名・スキーマ名・Volume 名は **`databricks.yml` の `variables` が唯一の設定場所**です。
+既定値のままなら **何も編集する必要はありません**。
+
+| 変数 | 既定値 |
+|---|---|
+| `catalog` | `demand_forecast_handson` |
+| `sample_schema` | `fc_sample` |
+| `landing_volume` | `landing` |
+| `participant_group` | `handson-participants` |
+| `warehouse_id` | ⭐ 空（`00` が変数ファイルに書き出します） |
+
+⭐ **ノートブックも同じ `databricks.yml` を読みます**（`notebooks/_config.py`）。
+⚠️ 同じ値を 2 箇所に書くと食い違って事故るため、1 箇所に寄せています。
+変えたいときは `databricks.yml` だけを直してください。
+
+---
+
 ## STEP 0 — 事前チェック
 
 - [ ] 参加者全員のアカウントが対象ワークスペースに追加されている
@@ -115,21 +156,17 @@ Git フォルダにこのリポジトリを取り込み、画面から bundle �
 
 ⚠️ これを飛ばすと、見本 Genie Agent の回答精度が出ません。
 
-## STEP 7 — 見本の Genie Agent
+## STEP 7 — 見本のダッシュボードと Genie Agent
 
-⭐ **見本ダッシュボードは STEP 3 のデプロイで既に作られています。**
-⚠️ 参加者グループに **`CAN VIEW`** を付けてください（画面の「共有」から）。
+⭐⭐ **どちらも STEP 3 のデプロイで既に作られています。** 作業は不要です。
 
-### ⚠️ Genie Agent — 画面から手で作ります
+⚠️ **参加者グループに `CAN VIEW` を付けてください**（それぞれの画面の「共有」から）。
+⚠️ どちらも**開いた人の権限**でクエリを実行するため、
+参加者が見本スキーマを読めないと開いてもエラーになります
+（STEP 2 の GRANT で付与済みのはずです）。
 
-⚠️ Genie Agent は定義の形式が公開されていないため、自動作成できません。
-手順と貼り付け用の下書きは [`genie/README.md`](../genie/README.md) にあります。
-
-⭐ 作ったあとリポジトリに取り込めば、次回から配れます（CLI がある場合）。
-
-```bash
-databricks bundle generate genie-space --key demand_agent_sample
-```
+> ⭐ Genie Agent の定義（`resources/genie_sample.yml`）は公開ドキュメントに形式が無く、
+> API を試して特定しました。要点は同ファイルのコメントに書いてあります。
 
 ## STEP 8 — MMF のスキルを配置（`08` を触らせる場合）
 

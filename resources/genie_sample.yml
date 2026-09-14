@@ -1,0 +1,42 @@
+# 完成見本の Genie Agent
+#
+# ⭐ 参加者は「これから作るもの」を先に見るために開きます。
+#    名前に「見本」を含めているのは、参加者がその文字で探すためです。
+#
+# ⚠️ 内部の識別子は旧名称のままです（DAB のキーは `genie_spaces`）。
+#    製品名は「Genie Agent」です。
+#
+# ⭐ 渡しているのは**メトリクスビュー 2 本だけ**です。
+#    生のファクトテーブルを渡すと結合を誤りやすく、回答精度が落ちます。
+#
+# ⚠️⚠️ `serialized_space` の形式は公開ドキュメントに無いため、API を試して確認しました。
+#    分かったこと:
+#      - `version` は 1 か 2。省略すると `ExportConverter supports versions 1 and 2, but got 0`
+#      - テーブルは `data_sources.tables[].identifier`（⚠️ `full_name` や `name` は不可）
+#      - 指示は `instructions.text_instructions[].content`（⚠️ **文字列の配列**。文字列単体は不可）
+#      - ⚠️ エラー `Expected 'START_OBJECT' not 'VALUE_STRING'` は
+#        「そのフィールドは存在するが、値がオブジェクト/配列であるべき」という意味
+#
+# ⭐ ここでは **YAML にインラインで書いています**（別ファイルにすると
+#    `${var.catalog}` などの変数が置換されないため）。
+resources:
+  genie_spaces:
+    demand_agent_sample:
+      title: "[handson] 見本 需要分析エージェント"
+      description: "アクアテック工業の需要と予測精度を自然言語で分析するための見本。参加者は同じものを自分のスキーマで作ります。"
+      parent_path: /Workspace/Users/${workspace.current_user.userName}
+      warehouse_id: ${var.warehouse_id}
+      serialized_space:
+        version: 2
+        data_sources:
+          tables:
+            - identifier: ${var.catalog}.${var.sample_schema}.mv_demand
+            - identifier: ${var.catalog}.${var.sample_schema}.mv_forecast_accuracy
+        instructions:
+          text_instructions:
+            - content:
+                - "回答は必ず日本語で返してください。"
+                - "数量は整数、比率は小数第 1 位までに丸めてください。"
+                - >-
+                  予測精度について質問されたときは、誤差率と誤差個数を必ず両方示してください。
+                  数量の少ない品目は誤差率が大きく出るため、率だけでは判断を誤ります。

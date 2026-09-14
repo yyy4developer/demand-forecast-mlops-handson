@@ -35,14 +35,78 @@
 
 # COMMAND ----------
 
-# ★★★ 管理者が環境に合わせて設定する箇所 ★★★
-# ハンズオンで使うカタログ名
-DEFAULT_CATALOG = "demand_forecast_handson"
+# MAGIC %md
+# MAGIC ## ⭐ 設定は `databricks.yml` の 1 箇所だけ
+# MAGIC
+# MAGIC ⭐ カタログ名・スキーマ名・Volume 名は **`databricks.yml` の `variables`** から読みます。
+# MAGIC ⚠️ **このファイルを編集する必要はありません。**
+# MAGIC
+# MAGIC ⭐ 環境に合わせて変えたいときは `databricks.yml` を 1 箇所直すだけです。
+# MAGIC 同じ値を 2 箇所に書くと食い違って事故るため、こうしています。
 
+# COMMAND ----------
+
+import os
+import re
+
+# ⭐ `databricks.yml` から値を読む（このノートブックの 1 階層上にあります）
+_nb = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+_root = os.path.normpath(os.path.join(os.path.dirname(_nb), ".."))
+_prefix = "" if _root.startswith("/Workspace") else "/Workspace"
+BUNDLE_YAML = f"{_prefix}{_root}/databricks.yml"
+
+# 読めなかったときに使う既定値
+_FALLBACK = {"catalog": "demand_forecast_handson", "sample_schema": "fc_sample", "landing_volume": "landing"}
+
+
+def _read_bundle_variables(path: str) -> dict:
+    """`databricks.yml` の variables から default 値を読む。
+
+    ⚠️ PyYAML が入っていない環境でも動くよう、必要な部分だけを行単位で拾います。
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return {}
+
+    found: dict[str, str] = {}
+    in_variables = False
+    current = None
+    for line in lines:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        # インデントの無い行で variables ブロックの開始・終了を判断する
+        if not line.startswith(" "):
+            in_variables = line.rstrip().startswith("variables:")
+            current = None
+            continue
+        if not in_variables:
+            continue
+        # "  <name>:" が変数名、"    default: <value>" がその既定値
+        name = line[2:].rstrip()
+        if line.startswith("  ") and not line.startswith("   ") and name.endswith(":"):
+            current = name[:-1].strip()
+            continue
+        stripped = line.strip()
+        if current and stripped.startswith("default:"):
+            found[current] = stripped[len("default:"):].strip().strip('"').strip("'")
+            current = None
+    return found
+
+
+_vars = _read_bundle_variables(BUNDLE_YAML)
+if _vars:
+    print(f"設定の読み込み元: {BUNDLE_YAML}")
+else:
+    print(f"⚠️ {BUNDLE_YAML} が読めなかったので既定値を使います")
+
+# ハンズオンで使うカタログ名
+DEFAULT_CATALOG = _vars.get("catalog") or _FALLBACK["catalog"]
 # 検証済みの見本が入っているスキーマ
-SAMPLE_SCHEMA = "fc_sample"
+SAMPLE_SCHEMA = _vars.get("sample_schema") or _FALLBACK["sample_schema"]
 # CSV を置く Volume 名（見本にも、あなたのスキーマにも同じ名前で作ります）
-LANDING_VOLUME = "landing"
+LANDING_VOLUME = _vars.get("landing_volume") or _FALLBACK["landing_volume"]
 
 # 参加者ごとのスキーマ名のプレフィックス
 SCHEMA_PREFIX = "fc_ws"
@@ -50,8 +114,6 @@ SCHEMA_PREFIX = "fc_ws"
 SCHEMA_PER_USER = True
 
 # COMMAND ----------
-
-import re
 
 
 def _user_suffix() -> str:

@@ -111,11 +111,22 @@ git diff --stat data/          # 差分が出なければ再現できている
 ⭐⭐ **Databricks CLI は必要ありません。** Git フォルダに取り込んで、
 **画面からデプロイ**できます（`databricks.yml` は YAML のみ・変数ゼロ）。
 
-1. ⭐ `notebooks/admin/00_prepare_environment` を実行
+⚠️ **先に参加者グループを「アカウントレベル」で作っておいてください**
+（`00` では作れません。詳細は [docs/SETUP.md](./docs/SETUP.md)）。
+
+1. Git フォルダにこのリポジトリを clone
+2. ⭐ `notebooks/admin/00_prepare_environment` を実行
    - カタログ / SQL ウェアハウス / 参加者権限を作ります
    - ⭐⭐ ウェアハウス ID を **`.databricks/bundle/dev/variable-overrides.json`** に書き出すので、
      デプロイ時に渡す値がなくなります
-2. ⭐ `databricks.yml` があるフォルダを開き、画面の **「デプロイ」** を押す
+3. ⭐ `databricks.yml` があるフォルダを開き、画面の **「デプロイ」** を押す
+4. ⚠️ **データはまだ入っていません。** サンプルデータの投入・パイプライン実行・
+   メタデータ適用・MMF・初回モデルを [docs/SETUP.md](./docs/SETUP.md) の手順で実行します
+
+### ⭐ 設定ファイルを触る必要はありません
+
+カタログ名などは **`databricks.yml` の `variables` が唯一の設定場所**です。
+⭐ ノートブックも同じファイルを読むので、変えたいときは 1 箇所だけ直します。
 
 > 💡 CLI がある場合はこちらでも同じです。
 >
@@ -131,6 +142,7 @@ git diff --stat data/          # 差分が出なければ再現できている
 | サンプルデータ投入ジョブ | `resources/job_setup.yml` |
 | 見本用の bronze → silver → gold パイプライン | `resources/pipeline_medallion.yml` |
 | 完成見本のダッシュボード | `resources/dashboard_sample.yml` |
+| ⭐ 完成見本の Genie Agent | `resources/genie_sample.yml` |
 | 見本の月次ジョブ / 初回モデル作成ジョブ | `resources/jobs_mlops.yml` |
 
 ⚠️ **カタログと SQL ウェアハウスはこの bundle では作りません。**
