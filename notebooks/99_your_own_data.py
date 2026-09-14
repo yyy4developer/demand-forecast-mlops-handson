@@ -1,35 +1,36 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 99 — 自分のデータで試す（自由時間）
+# MAGIC # 99 — 自分のデータで、全部を自然言語で作る（自由時間）
 # MAGIC
 # MAGIC > ⏱ **目安 30 分**
 # MAGIC
-# MAGIC ⭐ ここまではこちらが用意したデータでした。
+# MAGIC ⭐ ここまではこちらが用意したデータと手順でした。
 # MAGIC **自分の手元にあるデータ**で、今日やったことをもう一度やってみます。
 # MAGIC
 # MAGIC ## ⭐⭐ この時間の目的
 # MAGIC
-# MAGIC ⚠️ **手でコードを書き直すことではありません。**
+# MAGIC ⚠️ **コードを書くことではありません。**
 # MAGIC
-# MAGIC > ⭐⭐ **Genie Code に自然言語で頼んで作らせる。**
+# MAGIC > ⭐⭐ **テーブル作成からダッシュボード・Genie Agent まで、
+# MAGIC > 全部 Genie Code に「言葉で頼んで」作らせる。**
 # MAGIC
-# MAGIC ## ⭐ 進め方 — ここまでできれば十分です
+# MAGIC ⭐ このノートブックで実行するコードは **CSV の置き場を確認する 1 セルだけ**です。
+# MAGIC ⚠️ 残りのセルは**プロンプトを表示するだけ**です。
+# MAGIC
+# MAGIC ## ⭐ 進め方
 # MAGIC
 # MAGIC | | 内容 | 目安 |
 # MAGIC |---|---|---|
-# MAGIC | 1〜5 | ⭐ **テーブルを作る**（CSV を置く → 列を合わせる → 保存） | 10 分 |
-# MAGIC | ⭐ 6-A | ⭐⭐ **ダッシュボードを作る**（自然言語で） | 8 分 |
-# MAGIC | ⭐ 6-B | ⭐⭐ **Genie Agent を作る**（自然言語で） | 10 分 |
-# MAGIC | 6-C | ⚠️ **おまけ** — 予測・モデル・自動化（時間が余ったら） | — |
+# MAGIC | 1 | CSV を自分の Volume に置く（⭐ 画面から。ここだけ手作業） | 5 分 |
+# MAGIC | ⭐ 2 | ⭐⭐ **テーブルを作らせる**（自然言語） | 5 分 |
+# MAGIC | ⭐ 3 | ⭐⭐ **ダッシュボードを作らせる** | 8 分 |
+# MAGIC | ⭐ 4 | ⭐⭐ **Genie Agent を作らせる** | 10 分 |
+# MAGIC | 5 | ⚠️ **おまけ** — 予測・モデル・自動化（時間が余ったら） | — |
 # MAGIC
-# MAGIC ⭐⭐ **メインはこの 3 つです**: テーブル作成 → ダッシュボード → Genie Agent。
-# MAGIC ⚠️ **それ以降は無理に進めなくて大丈夫です。**
+# MAGIC ⭐⭐ **メインは 2 〜 4 の 3 つです。** ⚠️ 5 は無理に進めなくて大丈夫です。
 # MAGIC
-# MAGIC ⭐ プロンプトは全部用意してあります（下のセルが出力します）。
-# MAGIC 💡 `prompts/genie_code_free_play.md` にもまとまっています。
-# MAGIC
-# MAGIC > ⚠️ **うまくいかないときは遠慮なく声をかけてください。**
-# MAGIC > 実データは必ず「想定と違う形」をしています。そこが今日いちばん学びになる部分です。
+# MAGIC > ⭐ プロンプトは全部用意してあります。⭐ **下のセルが自分のパスを埋めて出力します。**
+# MAGIC > 💡 `prompts/genie_code_free_play.md` にもまとまっています。
 
 # COMMAND ----------
 
@@ -38,7 +39,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 1. CSV を Volume に置く
+# MAGIC ## 1. CSV を自分の Volume に置く
 # MAGIC
 # MAGIC ### 手順
 # MAGIC
@@ -51,25 +52,30 @@
 # MAGIC > ⚠️ **社外に出せないデータは置かないでください。** この環境は検証用です。
 # MAGIC > 迷ったら、数行だけ抜いたサンプルにするか、数値を変えたものを使ってください。
 # MAGIC
-# MAGIC > ⭐⭐ **手元にデータが無い方へ — 練習用の CSV を用意してあります。**
+# MAGIC > ⭐⭐ **手元にデータが無い方へ — 練習用の CSV があります。**
 # MAGIC >
-# MAGIC > リポジトリの **`data/sample_own_data.csv`**（4 品目 × 30 か月）をダウンロードして
-# MAGIC > アップロードしてください。⭐ **列名がこのノートブックの既定と揃っている**ので、
-# MAGIC > そのまま通ります。
+# MAGIC > リポジトリの **`data/sample_own_data.csv`**（4 品目 × 30 か月）を
+# MAGIC > ダウンロードしてアップロードしてください。
 # MAGIC >
 # MAGIC > ⚠️ わざと「実データっぽい形」にしてあります:
 # MAGIC > **列名が日本語** / **年月が `2024年1月` 形式** / **数量に桁区切り (`2,155`)** /
 # MAGIC > ⭐ **出ない月がある品目つき**
+# MAGIC > → ⭐ **Genie Code がこれをどう捌くかが見どころです。**
 
 # COMMAND ----------
 
+import os
+
 MY_UPLOAD_DIR = f"{LANDING_PATH}/your_own_data"
 dbutils.fs.mkdirs(MY_UPLOAD_DIR)
-print("CSV をここにアップロードしてください:")
+
+print("CSV をここにアップロードしてください")
+print("=" * 78)
 print(f"  {MY_UPLOAD_DIR}")
+print("=" * 78)
 print()
 print("カタログ画面での場所:")
-print(f"  {catalog}  →  {schema}  →  ボリューム  →  {LANDING_VOLUME}  →  your_own_data")
+print(f"  {catalog} → {schema} → ボリューム → {LANDING_VOLUME} → your_own_data")
 
 from databricks.sdk import WorkspaceClient
 
@@ -82,298 +88,249 @@ displayHTML(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. 置いたファイルを確認する
+# MAGIC ### 置けたか確認する
+# MAGIC
+# MAGIC ⭐ アップロードしたら下のセルを実行してください。次のプロンプトにファイル名が入ります。
+# MAGIC
+# MAGIC > ⭐⭐ **このセルが、あなたが実行する最後のコードです。**
+# MAGIC > ⚠️ ここから先のセルは**プロンプトを表示するだけ**で、
+# MAGIC > テーブル作成・確認・ダッシュボード・Genie Agent は**全部 Genie Code にやらせます。**
 
 # COMMAND ----------
 
-import os
+files = sorted(f for f in os.listdir(MY_UPLOAD_DIR)) if os.path.isdir(MY_UPLOAD_DIR) else []
 
-files = sorted(os.listdir(MY_UPLOAD_DIR)) if os.path.isdir(MY_UPLOAD_DIR) else []
 if files:
     print(f"{len(files)} 件のファイルがあります:")
     for f in files:
-        size = os.path.getsize(f"{MY_UPLOAD_DIR}/{f}")
-        print(f"  {f:<50} {size:>12,} bytes")
+        print(f"  ✅ {f}  ({os.path.getsize(f'{MY_UPLOAD_DIR}/{f}'):,} bytes)")
 else:
     print("⚠️ まだファイルがありません。上の手順でアップロードしてください。")
 
-# COMMAND ----------
+# ⭐ プロンプトに埋め込む値
+MY_FILE = files[0] if files else "<アップロードしたファイル名>"
+MY_CSV_PATH = f"{MY_UPLOAD_DIR}/{MY_FILE}"
+MY_TABLE = f"{MY}.my_shipments"
 
-# MAGIC %md
-# MAGIC ## 3. 読み込んで中身を見る
-# MAGIC
-# MAGIC ⭐ 下の `MY_FILE` に自分のファイル名を入れて実行してください。
-# MAGIC
-# MAGIC ### ⚠️ 実データでよくつまずくところ
-# MAGIC
-# MAGIC | ⚠️ 症状 | 対処 |
-# MAGIC |---|---|
-# MAGIC | 日本語が化ける | `encoding` を `Shift_JIS` や `CP932` にする（下のセルで切り替えられます） |
-# MAGIC | 先頭に説明行がある | `skipRows` で読み飛ばす |
-# MAGIC | 数値がカンマ区切りで文字列になる | 読み込んだ後に `replace(',', '')` して数値化する |
-# MAGIC | 年月が「2026年4月」「2026/4」など | 下のセルで月末日に変換します |
-# MAGIC | 月ごとに別ファイル・形式が違う | ⭐ **まず 1 ファイルだけで通してから増やす** |
-
-# COMMAND ----------
-
-# ★ 自分のファイル名に書き換えてください
-MY_FILE = files[0] if files else None
-
-if MY_FILE is None:
-    print("⚠️ まだファイルがありません。上の手順で CSV をアップロードしてから、")
-    print("   このセル以降をもう一度実行してください。")
-    dbutils.notebook.exit("no file uploaded yet")
-
-# ★ 日本語が化けたら "Shift_JIS" や "CP932" に変えてください
-ENCODING = "UTF-8"
-# ★ 先頭に説明行があるときは行数を入れてください
-SKIP_ROWS = 0
-
-print(f"読み込むファイル: {MY_FILE}（encoding={ENCODING}, skipRows={SKIP_ROWS}）")
-
-raw = (
-    spark.read.format("csv")
-    .option("header", "true")
-    .option("encoding", ENCODING)
-    .option("skipRows", SKIP_ROWS)
-    .option("inferSchema", "true")
-    .load(f"{MY_UPLOAD_DIR}/{MY_FILE}")
-)
-
-print(f"\n行数: {raw.count():,}")
-print("列:")
-for f in raw.schema.fields:
-    print(f"  {f.name:<30} {f.dataType.simpleString()}")
-display(raw.limit(20))
+print()
+print("これから使う値")
+print("=" * 78)
+print(f"  CSV       : {MY_CSV_PATH}")
+print(f"  作るテーブル: {MY_TABLE}")
+print("=" * 78)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4. ⭐ 列名を今日の形に合わせる
+# MAGIC ## 2. ⭐⭐ テーブルを作らせる（自然言語）
 # MAGIC
-# MAGIC 今日使ったテーブルは、この 4 列だけあれば同じことができます。
+# MAGIC ⭐ **Genie Code を開いて、下のセルが出すプロンプトをそのまま貼ってください。**
+# MAGIC （右上のランプのアイコン、または左メニュー）
 # MAGIC
-# MAGIC | 必要な列 | 意味 |
-# MAGIC |---|---|
-# MAGIC | `item_code` | 品目や商品を識別するもの |
-# MAGIC | `channel` | チャネル・拠点・得意先など（無ければ固定値でよい） |
-# MAGIC | `ym` | 年月（⭐ **月末日**に揃えます） |
-# MAGIC | `qty` | 数量 |
+# MAGIC ⚠️ **自分でコードを書かないでください。** Genie Code に作らせるのがこの時間の目的です。
 # MAGIC
-# MAGIC ⭐ 下のセルで、自分のデータの列名を左側に書いてください。
-
-# COMMAND ----------
-
-# ★ 左が「今日の形の列名」、右が「自分のデータの列名」
-COLUMN_MAP = {
-    "item_code": "商品コード",     # ← 自分のデータの列名に書き換え
-    "channel":   None,             # ← 無ければ None（固定値 'ALL' になります）
-    "ym":        "年月",           # ← 自分のデータの列名に書き換え
-    "qty":       "数量",           # ← 自分のデータの列名に書き換え
-}
-
-from pyspark.sql import functions as F
-
-available = set(raw.columns)
-missing = [v for v in COLUMN_MAP.values() if v is not None and v not in available]
-if missing:
-    print(f"⚠️ 見つからない列があります: {missing}")
-    print(f"   実際の列名: {sorted(available)}")
-    print("   COLUMN_MAP を直してから再実行してください。")
-else:
-    df = raw.select(
-        F.col(COLUMN_MAP["item_code"]).cast("string").alias("item_code"),
-        (F.lit("ALL") if COLUMN_MAP["channel"] is None
-         else F.col(COLUMN_MAP["channel"]).cast("string")).alias("channel"),
-        # ⭐ 年月を月末日に揃える。文字列でも日付でも通るように to_date を通します。
-        F.last_day(F.coalesce(
-            F.to_date(F.col(COLUMN_MAP["ym"])),
-            F.to_date(F.regexp_replace(F.col(COLUMN_MAP["ym"]).cast("string"),
-                                       r"[年/\.]", "-"), "yyyy-M"),
-        )).alias("ym"),
-        # ⭐ カンマ区切りの数値にも耐えるようにしておきます
-        F.regexp_replace(F.col(COLUMN_MAP["qty"]).cast("string"), ",", "")
-         .cast("double").alias("qty"),
-    )
-    display(df.limit(20))
-    bad_ym = df.filter(F.col("ym").isNull()).count()
-    bad_qty = df.filter(F.col("qty").isNull()).count()
-    print(f"\n年月が変換できなかった行: {bad_ym:,}")
-    print(f"数量が変換できなかった行: {bad_qty:,}")
-    if bad_ym or bad_qty:
-        print("⚠️ 変換できない行があります。元の値を確認してください。")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## 5. 自分のスキーマにテーブルとして保存する
-# MAGIC
-# MAGIC ⭐ ここまで来れば、今日やったことが全部そのまま使えます。
-
-# COMMAND ----------
-
-TABLE_NAME = f"{MY}.my_shipments"
-
-if not missing:
-    (df.groupBy("item_code", "channel", "ym")
-       .agg(F.sum("qty").alias("qty"))
-       .write.mode("overwrite").option("overwriteSchema", "true")
-       .saveAsTable(TABLE_NAME))
-    spark.sql(f"COMMENT ON TABLE {TABLE_NAME} IS '自分で持ち込んだデータ。品目 × チャネル × 月で集計済み。'")
-    n = spark.table(TABLE_NAME).count()
-    print(f"✅ {TABLE_NAME} に {n:,} 行を保存しました")
-    display(spark.sql(f"""
-        SELECT
-          COUNT(DISTINCT item_code) AS `品目数`,
-          COUNT(DISTINCT channel)   AS `チャネル数`,
-          MIN(ym)                   AS `最初の月`,
-          MAX(ym)                   AS `最後の月`,
-          COUNT(DISTINCT ym)        AS `月数`
-        FROM {TABLE_NAME}
-    """))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## 6. ⭐⭐ ここから Genie Code で遊ぶ
-# MAGIC
-# MAGIC ⭐ **下のセルを実行すると、自分のテーブル名が入ったプロンプトが出ます。**
-# MAGIC それを Genie Code にそのまま貼ってください。
-# MAGIC
-# MAGIC ⭐⭐ **メインは ⓪ → ① → ② → ③ の 4 つ**（データ理解 → ダッシュボード →
-# MAGIC メタデータ → Genie Agent）。⚠️ **④ 以降はおまけです。**
-# MAGIC
-# MAGIC ### ⚠️ コツは 3 つだけ
+# MAGIC ### ⭐ ここで見てほしいこと
 # MAGIC
 # MAGIC | | |
 # MAGIC |---|---|
-# MAGIC | 1 | ⚠️ **一度に全部頼まない。** ⓪ から順に 1 つずつ |
-# MAGIC | 2 | ⭐ **⓪ と ② を先にやる。** データの理解とメタデータで後の精度が決まります |
-# MAGIC | 3 | ⭐ **質問されたら答える。** それがこの時間の体験そのものです |
+# MAGIC | ⭐ | **CSV を勝手に読んで、列の意味を推測してくれる** |
+# MAGIC | ⭐ | **日本語の列名・変な日付形式・桁区切りを、言われた通りに捌く** |
+# MAGIC | ⭐ | ⚠️ **分からないことは質問してくる** — それに答えるのが体験です |
 # MAGIC
-# MAGIC > ⭐ Genie Code は右上のランプのアイコン、または左メニューから開きます。
+# MAGIC > ⚠️ **うまくいかなかったら、そのまま「〜がおかしい」と伝えて直させてください。**
+# MAGIC > ⭐ 会話で直していくのが本来の使い方です。
 
 # COMMAND ----------
 
-MAIN_PROMPTS = [
-    ("⓪ まずデータを理解させる（最初にやると精度が上がります）", """
-テーブル {t} の中身を調べて、次を教えてください。
+PROMPT_TABLE = """
+Volume にある CSV を読んで、Unity Catalog のテーブルを作ってください。
 
-- 各列の意味の推測と、欠損・重複の有無
-- 系列の数と、1 系列あたりの月数の分布
-- 数量の分布（ゼロが多い系列があるか）
-- ⭐ 需要の性質で系列を分類してください
-  （毎月安定 / 数量が振れる / 出ない月がある）
+- CSV      : {csv}
+- 作成先    : {table}
 
-結果は表で見せてください。
-"""),
-    ("① ダッシュボードを作る（01 に相当）", """
-{t} を使って AI/BI ダッシュボードを作ってください。
+⭐ まず CSV の中身を見て、各列が何を表しているか教えてください。
+   そのうえで、次の 4 列に揃えたテーブルを作ってください。
 
-- 上部に KPI: 総数量 / 系列数 / 直近月の数量
+  | 列 | 意味 |
+  |---|---|
+  | item_code | 品目・商品を識別するもの |
+  | channel   | チャネル・拠点・得意先など（⭐ 該当する列が無ければ 'ALL' 固定でよい） |
+  | ym        | 年月（⚠️ **月末日の DATE** に揃えること） |
+  | qty       | 数量（数値型） |
+
+⚠️ 次の点に注意してください。実データではよく起きます。
+
+- 列名が日本語のことがあります → SQL では**バッククォートで囲む**必要があります
+- 年月が「2024年1月」「2024/1」「2024-01」など**表記がばらついている**ことがあります
+  → ⭐ どの形式でも月末日に揃えてください
+- 数量に**桁区切り**（"2,155"）が入っていることがあります → カンマを除いて数値にしてください
+- 文字コードが Shift_JIS のことがあります → 日本語が化けたら読み直してください
+
+⭐ 最後に、作ったテーブルを SELECT して次を見せてください。
+- 何行取り込めたか / 変換できなかった行が何行あったか
+- 品目数・チャネル数・期間（最初の月と最後の月）・月数
+- ⚠️ 同じ品目×チャネル×月が重複していないか
+- 先頭 20 行
+
+⚠️ ここまで全部あなたにやってほしいです。私は SQL を書きません。
+"""
+
+print("=" * 78)
+print("  ⭐⭐ プロンプト ① テーブルを作る")
+print("=" * 78)
+print(PROMPT_TABLE.format(csv=MY_CSV_PATH, table=MY_TABLE))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3. ⭐⭐ ダッシュボードを作らせる（`01` に相当）
+# MAGIC
+# MAGIC ⭐ `01` では画面をポチポチして作りました。⭐ **今度は言葉で頼みます。**
+
+# COMMAND ----------
+
+PROMPT_DASHBOARD = """
+{table} を使って AI/BI ダッシュボードを作ってください。
+
+- 上部に KPI を 3 つ: 総数量 / 系列数（品目×チャネル） / 直近月の数量
 - 月ごとの数量推移（折れ線）
-- 品目上位 10 件の数量（棒）
-- 数量上位の系列の表
+- 品目別の数量 上位 10 件（横棒）
+- チャネル別の構成（円）— チャネルが 1 種類しかなければ省略してよい
+- 数量上位の系列の一覧（表）
 
-タイトルと軸ラベルは日本語にしてください。
-"""),
-    ("② メタデータとメトリクスビューを作る（Genie の精度はここで決まる）", """
-{t} に、Genie Agent が正しく答えられるようメタデータを付けてください。
+⭐ タイトルと軸ラベルは日本語にしてください。
+⚠️ 日本語の別名を使うときはバッククォートで囲んでください。
+"""
 
-- テーブルと全列に日本語のコメントを付ける
-- 数量・年月・品目・チャネルに相当する列が何かを明示する
+print("=" * 78)
+print("  ⭐⭐ プロンプト ② ダッシュボードを作る")
+print("=" * 78)
+print(PROMPT_DASHBOARD.format(table=MY_TABLE))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 4. ⭐⭐ Genie Agent を作らせる（`02` に相当）
+# MAGIC
+# MAGIC ⚠️⚠️ **順番が大事です。** `02` でやったとおり、
+# MAGIC ⭐ **先にメタデータとメトリクスビューを作らせてから** Genie Agent を作ります。
+# MAGIC
+# MAGIC ⚠️ 逆順にすると「Genie の答えがおかしい」で終わってしまいます。
+
+# COMMAND ----------
+
+PROMPT_METADATA = """
+{table} に、Genie Agent が正しく答えられるようメタデータを付けてください。
+
+- テーブルと全列に**日本語のコメント**を付ける
+  （どの列が数量で、どの列が年月で、どの列が品目なのかが分かるように）
 - ⭐ メトリクスビューを 1 つ作ってください
-  - 軸: 年月 / 品目 / チャネル
+  - 軸  : 年月 / 品目 / チャネル
   - 指標: 合計数量 / 月平均数量 / 系列数
-"""),
-    ("③ Genie Agent を作る（02 に相当）", """
-② で作ったメトリクスビューを使う Genie Agent を作ってください。
+- ⭐ 軸と指標にも日本語の説明を付けてください
+"""
 
-- 渡すのはメトリクスビューだけにする（生テーブルは渡さない）
-- 指示: 回答は日本語 / 数量は整数 / 比率は小数第 1 位まで
-- 動作確認用に、業務で聞きたくなる質問を 5 つ提案してください
-"""),
-]
+PROMPT_GENIE = """
+さきほど作ったメトリクスビューを使う Genie Agent を作ってください。
 
-# ⚠️ ここから下は「おまけ」。時間が余った人だけ。
-OPTIONAL_PROMPTS = [
-    ("④ SQL 1 文で予測する（03 に相当）", """
-{t} に対して ai_forecast() で 12 か月先まで予測する SQL を書いてください。
+- ⭐ 渡すのは**メトリクスビューだけ**にしてください（生のテーブルは渡さない）
+- 指示は次の 3 つ
+  - 回答は必ず日本語で返す
+  - 数量は整数、比率は小数第 1 位まで
+  - 分からないときは推測せず、分からないと答える
+- ⭐ 動作確認用に、業務で聞きたくなる質問を 5 つ提案してください
+"""
+
+for label, body in [
+    ("⭐⭐ プロンプト ③ メタデータとメトリクスビュー（⚠️ 先にこれ）", PROMPT_METADATA),
+    ("⭐⭐ プロンプト ④ Genie Agent を作る", PROMPT_GENIE),
+]:
+    print("=" * 78)
+    print(f"  {label}")
+    print("=" * 78)
+    print(body.format(table=MY_TABLE))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 5. ⚠️ おまけ — 時間が余ったら
+# MAGIC
+# MAGIC ⚠️ **ここから先は無理に進めなくて大丈夫です。**
+# MAGIC ⭐ メイン（テーブル → ダッシュボード → Genie Agent）が終わっていれば十分です。
+# MAGIC
+# MAGIC ⭐ プロンプトには **今日その場で強調したポイント**を入れてあります。
+# MAGIC 「ただ作らせる」ではなく「⭐ **正しい作り方を指示する**」のがコツです。
+
+# COMMAND ----------
+
+OPTIONAL = [
+    ("⑤ SQL 1 文で予測する（03 に相当）", """
+{table} に対して ai_forecast() で 12 か月先まで予測する SQL を書いてください。
 
 - 系列は品目 × チャネル（group_col）
 - 月次
-- ⚠️ horizon は「何期先」ではなく終端の日付で渡すこと
+- ⚠️ horizon は「何期先」ではなく**終端の日付**で渡すこと
 - ⚠️ frequency は 'ME'
-- SQL ウェアハウスで実行できる形にしてください
+- ⚠️ ノートブックの計算資源では動きません。SQL ウェアハウスで実行できる形にしてください
 
 結果を可視化するグラフも作ってください。
 """),
-    ("⑤ モデルを作って記録・登録する（04 に相当）", """
-{t} で需要予測モデルを作ってください。
+    ("⑥ モデルを作って記録・登録する（04 に相当）", """
+{table} で需要予測モデルを作ってください。
 
-- ⭐ 特徴量は関数に切り出して、学習と推論で同じものを使えるようにする
+- ⭐ 特徴量は関数に切り出して、学習と推論で**同じもの**を使えるようにする
   （ラグ 1/2/3/12 か月、移動平均、移動標準偏差、非ゼロ比率、月、通し番号）
-- ⚠️ 移動平均は当月を含めない（答えを見ないようにする）
+- ⚠️ 移動平均に**当月を含めない**でください（答えを見ながら予測することになります）
 - 検証は直近 12 か月
-- ⭐⭐ 「前年同月と同じ」というベースラインを先に計算し、必ず並べて比較する
+- ⭐⭐ 「前年同月と同じ」というベースラインを**先に**計算し、必ず並べて比較してください
 - 条件を変えて 3 回学習し、MLflow に記録する
 - いちばん良いものを Unity Catalog に登録して @champion を付ける
 - MAE と MASE をタグに残す
 """),
-    ("⑥ まとめて推論し、精度を記録する（05 に相当）", """
+    ("⑦ まとめて推論し、精度を記録する（05 に相当）", """
 @champion を名前で呼び出して、実績のある全期間の予測を作り直してください。
 
-- 予測を {s}.my_forecast_model に書き出す
-- ⭐ 予測と実績を突き合わせた評価テーブルも作る
-  （誤差率と誤差個数の両方を持たせること）
+- 予測を {schema}.my_forecast_model に書き出す
+- ⭐ 予測と実績を突き合わせた評価テーブルも作ってください
+  ⚠️ 誤差は**率と個数の両方**を持たせること（率だけでは数量の少ない品目を誤判定します）
 - ⭐ ベースラインとモデルを需要の性質ごとに比較する表を作る
-- グラフも作る: 予測 vs 実績の散布図 / 月ごとの誤差推移
+- グラフも: 予測 vs 実績の散布図 / 月ごとの誤差推移
 """),
-    ("⑦ 再学習して、勝ったら入れ替える（06 に相当）", """
-再学習して本番と比較するノートブックを作ってください。
+    ("⑧ 再学習して、勝ったら入れ替える（06 に相当）", """
+再学習して本番と比較する処理を作ってください。
 
 - 最新までのデータで学習し、新バージョンとして登録して @challenger を付ける
-- ⚠️ 設定（ハイパーパラメータ）は今の @champion から引き継ぐ
-  （データを新しくした効果だけを見たいので）
-- ⭐ 両モデルを同じ検証データで実際に走らせて比較する
-- ⭐ 判定は直近 3 か月で行う。基準を満たしたら @champion を付け替える
-- 満たさなければ据え置き、その旨を出力する
+- ⚠️ ハイパーパラメータは今の @champion から**引き継いで**ください
+  （データを新しくした効果だけを見たいので、設定は変えない）
+- ⭐ 両モデルを**同じ検証データで実際に走らせて**比較する
+- ⭐ 判定は**直近 3 か月**で行い、基準を満たしたら @champion を付け替える
+- ⚠️ 満たさなければ据え置き、その旨を出力してください（見送りも正しい結果です）
 """),
-    ("⑧ 自動実行にする（07 に相当）", """
-⑥ と ⑦ を毎月自動で回すジョブを作ってください。
+    ("⑨ 自動実行にする（07 に相当）", """
+⑦ と ⑧ を毎月自動で回すジョブを作ってください。
 
 - タスク: データ取り込み → 再学習と昇格判定 → 推論と評価の更新
 - ⭐ 新しいファイルが置かれたら動くトリガーを付ける
+  ⚠️ 同名ファイルの上書きでは発火しないので、月ごとに別ファイル名にする前提で
 - ⚠️ 失敗したらメールが飛ぶようにする
 - Databricks Asset Bundle の YAML としても書き出してください
 """),
-    ("⑨ 品目ごとに手法を選ぶ（08 に相当）", """
-{t} の系列を性質で分類し、⭐ 系列ごとに向いている予測手法を割り当てる方針を
+    ("⑩ 品目ごとに手法を選ぶ（08 に相当）", """
+{table} の系列を性質で分類し、系列ごとに向いている予測手法を割り当てる方針を
 提案してください。
 
 - 予測しやすい系列とそうでない系列に分ける
-- ⚠️ 予測しにくい系列は「当てにいかない」選択肢も含めて検討する
+- ⚠️ 予測しにくい系列は ⭐ **「当てにいかない」選択肢も含めて**検討してください
   （前年同月そのまま / 平均 / ゼロ）
 - どの系列にどの手法を当てたかが後から分かる形で記録する
 """),
 ]
 
-def show(prompts, header):
-    print("#" * 78)
-    print(f"#  {header}")
-    print("#" * 78)
-    print()
-    for title, body in prompts:
-        print("=" * 78)
-        print(f"  {title}")
-        print("=" * 78)
-        print(body.format(t=TABLE_NAME, s=MY))
-
-
-show(MAIN_PROMPTS, "⭐⭐ メイン — この 4 つを順にやってください")
-print()
-print()
-show(OPTIONAL_PROMPTS, "⚠️ おまけ — 時間が余ったら。全部やる必要はありません")
+for label, body in OPTIONAL:
+    print("=" * 78)
+    print(f"  {label}")
+    print("=" * 78)
+    print(body.format(table=MY_TABLE, schema=MY))
 
 # COMMAND ----------
 
@@ -382,14 +339,17 @@ show(OPTIONAL_PROMPTS, "⚠️ おまけ — 時間が余ったら。全部や�
 # MAGIC
 # MAGIC | ⚠️ 症状 | ⭐ 対処 |
 # MAGIC |---|---|
-# MAGIC | 的が外れた答えが返る | ⭐ **1 つずつ頼む。** ⓪→①→② の順を守る |
-# MAGIC | 列の意味を誤解される | ⭐ **⓪ と ② を先にやる。** メタデータが効きます |
-# MAGIC | 日本語の列名でエラー | ⚠️ **バッククォートで囲むよう指示する** |
-# MAGIC | 月数が足りないと言われる | ⚠️ ラグ 12 か月を使うため **各系列 24 か月以上**必要。⭐ 足りなければ ④ の `ai_forecast` を試す |
-# MAGIC | そもそもデータが汚い | ⭐ **⓪ の結果を見せて「まず整えて」と頼む** |
+# MAGIC | 的が外れた答えが返る | ⭐ **1 つずつ頼む。** ① → ② → ③ → ④ の順を守る |
+# MAGIC | 列の意味を誤解される | ⭐ **① で「列の意味を教えて」から始める。** 推測を先に見せてもらう |
+# MAGIC | 日本語の列名でエラー | ⚠️ **「バッククォートで囲んで」と伝える** |
+# MAGIC | 年月が変換できない | ⭐ **元の値をそのまま見せて「この形式です」と伝える** |
+# MAGIC | Genie の答えがおかしい | ⚠️ ③ のメタデータを飛ばしていませんか |
+# MAGIC | 月数が足りないと言われる | ⚠️ ラグ 12 か月のため **各系列 24 か月以上**必要。⭐ 足りなければ ⑤ の `ai_forecast` へ |
 # MAGIC
-# MAGIC ### ⭐ うまくいかない方が学びになります
+# MAGIC ### ⭐⭐ うまくいかない方が学びになります
 # MAGIC
 # MAGIC 実データは必ず想定と違う形をしています。
-# MAGIC ⭐ **「どこで詰まったか」を持ち帰っていただくのが、この時間のいちばんの目的です。**
-# MAGIC 詰まったところは遠慮なく声をかけてください。
+# MAGIC ⭐ **「どこで詰まったか」「どう頼み直したら通ったか」**を持ち帰ってください。
+# MAGIC それがそのまま、社内で使うときのコツになります。
+# MAGIC
+# MAGIC ⚠️ 詰まったところは遠慮なく声をかけてください。
