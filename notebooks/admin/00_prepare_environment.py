@@ -12,8 +12,9 @@
 # MAGIC |---|---|---|
 # MAGIC | 1 | カタログを作る | ⚠️ API 経由の作成が失敗する環境があるため SQL で作ります |
 # MAGIC | 2 | ⭐ **SQL ウェアハウスを用意する** | ⭐ **無ければ作ります。** ダッシュボード・Genie Agent・`ai_forecast` がこれを使います |
-# MAGIC | 3 | 参加者に権限を付ける | ⭐ **参加者が持つ権限をここで一覧にして固定します** |
-# MAGIC | 4 | 付いた権限を確認する | 当日「権限がなくて動かない」を防ぎます |
+# MAGIC | 3 | ⚠️⚠️ **参加者グループを確認する** | ⚠️ **ワークスペースローカルグループでは Unity Catalog に使えません**（作り方も載せています） |
+# MAGIC | 4 | 参加者に権限を付ける | ⭐ **参加者が持つ権限をここで一覧にして固定します** |
+# MAGIC | 5 | 付いた権限を確認する | 当日「権限がなくて動かない」を防ぎます |
 # MAGIC
 # MAGIC ⚠️⚠️ **このノートブックは bundle をデプロイする「前」に実行してください。**
 # MAGIC カタログが無いとデプロイが失敗します。
@@ -130,7 +131,83 @@ print("   ノートブックは実行時に自動でウェアハウスを見つ�
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3. ⭐ 参加者に権限を付ける
+# MAGIC ## 3. ⚠️⚠️ 参加者グループを確認する
+# MAGIC
+# MAGIC ⚠️⚠️ **グループは「アカウントレベル」で作る必要があります。**
+# MAGIC
+# MAGIC ワークスペースの画面で作れるグループには 2 種類あり、**片方は Unity Catalog に使えません**。
+# MAGIC
+# MAGIC | 種類 | Unity Catalog の権限付与 | 見分け方 |
+# MAGIC |---|---|---|
+# MAGIC | ⭐ **アカウントグループ** | ⭐ **使えます** | アカウントコンソールで作ったもの |
+# MAGIC | ⚠️ ワークスペースローカルグループ | ⚠️ **使えません** | ワークスペースだけで作ったもの |
+# MAGIC
+# MAGIC ⚠️ ワークスペースローカルグループに `GRANT` すると、こう言われます。
+# MAGIC
+# MAGIC ```
+# MAGIC PRINCIPAL_DOES_NOT_EXIST: Could not find principal with name <グループ名>
+# MAGIC ```
+# MAGIC
+# MAGIC ⚠️ **グループ名は存在しているのに「見つからない」と言われる**ので、
+# MAGIC 原因に気づきにくい種類のエラーです。
+# MAGIC
+# MAGIC ### ⭐ グループの作り方（画面から）
+# MAGIC
+# MAGIC #### A. アカウントコンソールから作る（確実な方法）
+# MAGIC
+# MAGIC 1. **アカウントコンソール**を開く
+# MAGIC    - Azure: `https://accounts.azuredatabricks.net`
+# MAGIC    - AWS: `https://accounts.cloud.databricks.com`
+# MAGIC 2. 左メニュー **「User management」** → **「Groups」** タブ
+# MAGIC 3. 右上 **「Add group」** → グループ名を入力（例: `handson-participants`）
+# MAGIC 4. 作ったグループを開き、**「Members」** に参加者を追加
+# MAGIC 5. 左メニュー **「Workspaces」** → 対象ワークスペースを開く →
+# MAGIC    **「Permissions」** タブ → **「Add permissions」** →
+# MAGIC    ⭐ **作ったグループを追加**（これを忘れると参加者がワークスペースに入れません）
+# MAGIC
+# MAGIC ⚠️ **アカウント管理者の権限が必要です。** 持っていない場合は依頼してください。
+# MAGIC
+# MAGIC #### B. ワークスペースの設定画面から追加する（既にアカウントグループがある場合）
+# MAGIC
+# MAGIC 1. 右上のアイコン → **「設定」**
+# MAGIC 2. **「ID とアクセス」**（Identity and access） → **「グループ」** → **「管理」**
+# MAGIC 3. **「グループを追加」** → ⭐ **既存のアカウントグループを選ぶ**
+# MAGIC
+# MAGIC ⚠️ ここで **「新規作成」を選ぶとワークスペースローカルグループになり、
+# MAGIC Unity Catalog に使えません。** 必ず既存のアカウントグループを選んでください。
+
+# COMMAND ----------
+
+found = api.do("GET", "/api/2.0/preview/scim/v2/Groups",
+               query={"filter": f'displayName eq "{group}"'}) or {}
+resources = found.get("Resources") or []
+
+group_ok = False
+if not resources:
+    print(f"❌ グループ `{group}` が見つかりません。")
+    print("   上の手順（A または B）で作ってから、このノートブックを再実行してください。")
+else:
+    g = resources[0]
+    kind = (g.get("meta") or {}).get("resourceType", "?")
+    print(f"グループ `{group}` が見つかりました（id={g.get('id')} / 種類={kind}）")
+    print(f"  メンバー数: {len(g.get('members') or [])}")
+    if kind == "WorkspaceGroup":
+        print()
+        print("⚠️⚠️ これは **ワークスペースローカルグループ** です。")
+        print("   Unity Catalog の権限付与には使えません。")
+        print("   上の手順 A でアカウントグループを作り直してください。")
+    else:
+        group_ok = True
+        print("⭐ アカウントグループです。Unity Catalog の権限付与に使えます。")
+
+    if not (g.get("members") or []):
+        print()
+        print("⚠️ メンバーがまだ 0 人です。参加者を追加してください。")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 4. ⭐ 参加者に権限を付ける
 # MAGIC
 # MAGIC ⭐⭐ **参加者が持つ権限はこれだけです。** ここに書かれていない操作は当日できません。
 # MAGIC
@@ -165,8 +242,12 @@ GRANTS = [
     f"GRANT READ VOLUME ON VOLUME {catalog}.{sample_schema}.{volume} TO `{group}`",
 ]
 
+if not group_ok:
+    print("⚠️ 参加者グループが使える状態でないため、権限付与を飛ばします。")
+    print("   上の手順でアカウントグループを用意してから再実行してください。")
+
 ok, failed = 0, []
-for g in GRANTS:
+for g in ([] if not group_ok else GRANTS):
     try:
         spark.sql(g)
         ok += 1
@@ -179,6 +260,8 @@ print(f"\n{ok}/{len(GRANTS)} 件の権限を付けました")
 
 # ⭐ SQL ウェアハウスの CAN_USE も付ける
 try:
+    if not group_ok:
+        raise RuntimeError("参加者グループが使える状態ではありません")
     api.do(
         "PATCH",
         f"/api/2.0/permissions/warehouses/{WAREHOUSE_ID}",
@@ -195,7 +278,7 @@ if failed:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4. 付いた権限を確認する
+# MAGIC ## 5. 付いた権限を確認する
 
 # COMMAND ----------
 
@@ -239,14 +322,12 @@ except Exception:  # noqa: BLE001
 # SQL ウェアハウス
 checks.append(("SQL ウェアハウス", f"{wh.get('name')}  (id: {WAREHOUSE_ID})", True))
 
-# 参加者グループ
-try:
-    found = api.do("GET", "/api/2.0/preview/scim/v2/Groups",
-                   query={"filter": f'displayName eq "{group}"'}) or {}
-    exists = bool(found.get("Resources"))
-    checks.append(("参加者グループ", group if exists else f"{group}（見つかりません）", exists))
-except Exception:  # noqa: BLE001
-    checks.append(("参加者グループ", f"{group}（確認できませんでした）", False))
+# 参加者グループ（アカウントグループであること）
+checks.append((
+    "参加者グループ",
+    group if group_ok else f"{group}（アカウントグループが必要）",
+    group_ok,
+))
 
 # サーバーレスが使えるか（このノートブックがサーバーレスで動いていれば OK）
 checks.append(("サーバーレスコンピュート", "このノートブックが動いているので利用可", True))
