@@ -46,7 +46,10 @@ resources:
               catalog: ${var.catalog}
               schema: ${var.sample_schema}
               volume: ${var.landing_volume}
-              # ⭐ 当日は "B"（新しい月）。運用では毎月の新ファイルを置く処理に置き換えます。
+              # ⭐ このタスクは「人が触る場所がゼロ」の完成形を見せるためのもの。
+              # ⚠️ 当日、参加者は notebook ではなく**画面から手で** CSV を置きます
+              #    （notebook による投入は見本ジョブ用 / e2e 検証用です）。
+              # 運用では毎月の新ファイルを基幹システムから出す処理に置き換えます。
               load_set: "B"
 
         # ② パイプラインを回して bronze → silver → gold を更新
