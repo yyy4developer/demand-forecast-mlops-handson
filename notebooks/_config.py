@@ -38,11 +38,19 @@
 # MAGIC %md
 # MAGIC ## ⭐ 設定は `databricks.yml` の 1 箇所だけ
 # MAGIC
-# MAGIC ⭐ カタログ名・スキーマ名・Volume 名は **`databricks.yml` の `variables`** から読みます。
-# MAGIC ⚠️ **このファイルを編集する必要はありません。**
+# MAGIC ⭐ カタログ名・スキーマ名・Volume 名は、次の順に探して**最初に見つかったもの**を使います。
+# MAGIC ⚠️ **参加者がこのファイルを編集する必要はありません。**
 # MAGIC
-# MAGIC ⭐ 環境に合わせて変えたいときは `databricks.yml` を 1 箇所直すだけです。
-# MAGIC 同じ値を 2 箇所に書くと食い違って事故るため、こうしています。
+# MAGIC | 優先 | 読み込み元 | 誰が書くか |
+# MAGIC |---|---|---|
+# MAGIC | ⭐ 1 | `.databricks/bundle/dev/variable-overrides.json` | ⭐ **`admin/00_prepare_environment`** が書き出す |
+# MAGIC | 2 | `databricks.yml` の `variables` の `default` | リポジトリの既定値 |
+# MAGIC | 3 | このファイル内の `_FALLBACK` | 上の 2 つが読めなかったとき |
+# MAGIC
+# MAGIC ⚠️⚠️ **1 を見ないと事故ります。** 管理者が既定と違うカタログ名を使った場合、
+# MAGIC `databricks.yml` の既定値のままだと `NO_SUCH_CATALOG_EXCEPTION` になります。
+# MAGIC
+# MAGIC ⭐ どこから読んだかは下のセルが表示します。⚠️ **想定と違ったらそこを直してください。**
 
 # COMMAND ----------
 
@@ -95,8 +103,38 @@ def _read_bundle_variables(path: str) -> dict:
     return found
 
 
-_vars = _read_bundle_variables(BUNDLE_YAML)
-if _vars:
+# ⭐⭐ 管理者が書き出した上書きファイル。`databricks.yml` の既定値より優先します。
+#
+# ⚠️ これを見ないと、管理者が既定と違うカタログ名を使ったときに
+#    NO_SUCH_CATALOG_EXCEPTION になります（deploy は上書きを読むのに、
+#    ノートブックだけ既定値を読んでいる状態）。
+BUNDLE_TARGET = "dev"
+OVERRIDE_JSON = f"{_prefix}{_root}/.databricks/bundle/{BUNDLE_TARGET}/variable-overrides.json"
+
+
+def _read_overrides(path: str) -> dict:
+    """管理者が書き出した変数の上書きファイルを読む（無ければ空）。"""
+    import json
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            loaded = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    # 値が空文字のものは「未設定」として扱う
+    return {k: v for k, v in loaded.items() if isinstance(v, str) and v}
+
+
+_yaml_vars = _read_bundle_variables(BUNDLE_YAML)
+_override_vars = _read_overrides(OVERRIDE_JSON)
+
+# ⭐ 上書きファイルが勝つ
+_vars = {**_yaml_vars, **_override_vars}
+
+if _override_vars:
+    print(f"⭐ 設定の読み込み元: {OVERRIDE_JSON}")
+    print(f"   （管理者が書き出した上書き: {', '.join(sorted(_override_vars))}）")
+elif _yaml_vars:
     print(f"設定の読み込み元: {BUNDLE_YAML}")
 else:
     print(f"⚠️ {BUNDLE_YAML} が読めなかったので既定値を使います")
@@ -149,6 +187,53 @@ try:
     schema = dbutils.widgets.get("schema") or DEFAULT_SCHEMA
 except Exception:
     catalog, schema = DEFAULT_CATALOG, DEFAULT_SCHEMA
+
+# ⭐⭐ 指定されたカタログが本当にあるか確かめ、無ければ探す
+#
+# ⚠️ 設定ファイルの値と実際のカタログ名がずれると、この先すべてが
+#    NO_SUCH_CATALOG_EXCEPTION で落ちます。よくある原因は
+#    「管理者が既定と違うカタログ名を使ったが、参加者側の Git フォルダには
+#    上書きファイルが無い」というものです。
+#
+# ⭐ そこで、見つからなければ**見本スキーマを持つカタログを探して**使います。
+#    参加者に見えるカタログはハンズオン用の 1 つだけなので、ほぼ一意に決まります。
+def _resolve_catalog(name: str) -> str:
+    try:
+        spark.sql(f"DESCRIBE CATALOG {name}")
+        return name
+    except Exception:  # noqa: BLE001
+        pass
+
+    print(f"⚠️ カタログ {name} が見つかりませんでした。{SAMPLE_SCHEMA} を持つカタログを探します。")
+    try:
+        names = [r[0] for r in spark.sql("SHOW CATALOGS").collect()]
+    except Exception:  # noqa: BLE001
+        names = []
+
+    hits = []
+    for c in names:
+        if c in ("system", "samples", "hive_metastore"):
+            continue
+        try:
+            found = spark.sql(f"SHOW SCHEMAS IN {c} LIKE '{SAMPLE_SCHEMA}'").collect()
+        except Exception:  # noqa: BLE001
+            continue
+        if found:
+            hits.append(c)
+
+    if len(hits) == 1:
+        print(f"⭐ カタログ {hits[0]} を使います（{SAMPLE_SCHEMA} が見つかりました）。")
+        print("⚠️ 設定ファイルの値と違っています。講師に伝えてください。")
+        return hits[0]
+
+    raise RuntimeError(
+        f"カタログ {name} が見つかりません。"
+        + (f" 候補が複数あります: {hits}。" if len(hits) > 1 else "")
+        + " 講師に正しいカタログ名を確認し、ノートブック上部の widget『カタログ』に入れてください。"
+    )
+
+
+catalog = _resolve_catalog(catalog)
 
 # よく使うパスをまとめておく
 MY = f"{catalog}.{schema}"
