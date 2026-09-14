@@ -117,6 +117,10 @@ print(f"使うウェアハウス: {warehouse_id}")
 # MAGIC | テーブル | `data_sources.tables[].identifier`（⚠️ `full_name` / `name` は不可） |
 # MAGIC | 指示 | `instructions.text_instructions[].content`（⚠️ **文字列の配列**。単体文字列は不可） |
 # MAGIC | ⚠️ 紛らわしいエラー | `Expected 'START_OBJECT' not 'VALUE_STRING'` は「そのフィールドは在るが、値がオブジェクト/配列であるべき」 |
+# MAGIC | ⚠️⚠️ **REST では文字列** | `serialized_space` は **JSON 文字列**で渡します。オブジェクトのままだと `Expected Scalar value for String field 'serialized_space'` |
+# MAGIC | 💡 指示文の扱い | ⚠️ API は `content` の配列を**1 つの文字列に連結**して保存します（動作に影響はありません） |
+# MAGIC
+# MAGIC ⭐ **DAB の YAML ではオブジェクトとして書けます。** DAB が内部で文字列化しているためです。
 
 # COMMAND ----------
 
@@ -139,11 +143,23 @@ SERIALIZED_SPACE = {
     },
 }
 
+import json
+
+# ⚠️⚠️ **`serialized_space` は JSON 文字列で渡します。** オブジェクトのまま渡すと
+#    こう言われます:
+#
+#      BadRequest: Could not parse request object:
+#        Expected Scalar value for String field 'serialized_space'
+#
+# ⭐ DAB の YAML ではオブジェクトとして書けますが、それは DAB が内部で
+#    文字列化しているためです。REST を直接呼ぶときは自分で dumps します。
+#
+# ⚠️ `ensure_ascii=False` を付けないと日本語がエスケープされて読みにくくなります。
 body = {
     "title": title,
     "description": DESCRIPTION,
     "warehouse_id": warehouse_id,
-    "serialized_space": SERIALIZED_SPACE,
+    "serialized_space": json.dumps(SERIALIZED_SPACE, ensure_ascii=False),
 }
 
 # COMMAND ----------
