@@ -12,6 +12,7 @@
 # MAGIC |---|---|---|
 # MAGIC | 1 | カタログを作る | ⚠️ API 経由の作成が失敗する環境があるため SQL で作ります |
 # MAGIC | 2 | ⭐ **SQL ウェアハウスを用意する** | ⭐ **無ければ作ります。** ダッシュボード・Genie Agent・`ai_forecast` がこれを使います |
+# MAGIC | 2b | ⭐⭐ **その ID をデプロイ用の変数ファイルに書き出す** | ⭐ **デプロイ時に渡す値が無くなります**（画面からデプロイできます） |
 # MAGIC | 3 | ⚠️⚠️ **参加者グループを確認する** | ⚠️ **ワークスペースローカルグループでは Unity Catalog に使えません**（作り方も載せています） |
 # MAGIC | 4 | 参加者に権限を付ける | ⭐ **参加者が持つ権限をここで一覧にして固定します** |
 # MAGIC | 5 | 付いた権限を確認する | 当日「権限がなくて動かない」を防ぎます |
@@ -125,8 +126,60 @@ print("=" * 66)
 print(f"  ⭐ SQL ウェアハウス ID : {WAREHOUSE_ID}")
 print(f"     名前               : {wh.get('name')}")
 print("=" * 66)
-print("※ この ID は覚えなくて構いません。")
-print("   ノートブックは実行時に自動でウェアハウスを見つけます。")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ⭐⭐ この ID をデプロイに渡す仕組み
+# MAGIC
+# MAGIC ダッシュボードは SQL ウェアハウスの ID を必要としますが、
+# MAGIC ID はワークスペースごとに違うのでリポジトリには書けません。
+# MAGIC
+# MAGIC ⭐ Databricks Asset Bundle には **変数の上書きファイル**という仕組みがあります。
+# MAGIC
+# MAGIC ```
+# MAGIC .databricks/bundle/<ターゲット>/variable-overrides.json
+# MAGIC ```
+# MAGIC
+# MAGIC ⭐ **デプロイのときに自動で読まれます**（画面からのデプロイでも読まれます）。
+# MAGIC 下のセルがこのファイルを書き出すので、**デプロイ時に何も渡す必要がありません**。
+# MAGIC
+# MAGIC ⚠️ このファイルは Git 管理外（`.gitignore` 済み）です。
+# MAGIC 環境ごとの値なので、リポジトリには入りません。
+
+# COMMAND ----------
+
+import json
+import os
+
+# このノートブックの 2 階層上が repo のルート（notebooks/admin/ の親の親）
+_nb = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(_nb), "..", ".."))
+_prefix = "" if REPO_ROOT.startswith("/Workspace") else "/Workspace"
+
+BUNDLE_TARGET = "dev"
+OVERRIDE_DIR = f"{_prefix}{REPO_ROOT}/.databricks/bundle/{BUNDLE_TARGET}"
+OVERRIDE_PATH = f"{OVERRIDE_DIR}/variable-overrides.json"
+
+overrides = {"warehouse_id": WAREHOUSE_ID}
+
+try:
+    os.makedirs(OVERRIDE_DIR, exist_ok=True)
+    with open(OVERRIDE_PATH, "w", encoding="utf-8") as f:
+        json.dump(overrides, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    print(f"✅ 変数の上書きファイルを書き出しました:")
+    print(f"   {OVERRIDE_PATH}")
+    print(f"   {json.dumps(overrides, ensure_ascii=False)}")
+    print()
+    print("⭐ これでデプロイ時に渡す値はありません。画面の「デプロイ」を押すだけです。")
+except OSError as e:
+    print(f"⚠️ 書き出せませんでした: {e}")
+    print()
+    print("⭐ 代わりに、デプロイのときに次のようにしてください:")
+    print(f"   ・画面のデプロイ: `databricks.yml` の warehouse_id の default を")
+    print(f"     \"{WAREHOUSE_ID}\" に書き換える")
+    print(f"   ・CLI: --var warehouse_id={WAREHOUSE_ID}")
 
 # COMMAND ----------
 
@@ -345,8 +398,8 @@ print()
 print("=" * 74)
 print("  ⭐ デプロイのときに渡す値: ありません")
 print("=" * 74)
-print("  この bundle は変数を 1 つも必要としません。")
-print("  SQL ウェアハウスの ID もノートブックが実行時に自分で見つけます。")
+print("  SQL ウェアハウスの ID は、上のセルが変数の上書きファイルに書き出しました。")
+print("  デプロイのときに自動で読まれます（画面からのデプロイでも読まれます）。")
 print("  → 画面の「デプロイ」を押すだけで配置できます。")
 
 # COMMAND ----------
@@ -362,11 +415,12 @@ print("  → 画面の「デプロイ」を押すだけで配置できます。"
 # MAGIC 2. ジョブ `[handson] 01 サンプルデータを Volume に投入` を **`load_set = A`** で実行
 # MAGIC 3. パイプライン `[handson] 見本 メダリオンパイプライン` を実行（見本の gold ができます）
 # MAGIC 4. `notebooks/_uc_metadata` を **`schema = fc_sample`** で実行
-# MAGIC 5. `notebooks/admin/01_deploy_dashboard` を実行（見本ダッシュボード）
-# MAGIC 6. `src/setup/run_mmf_reference` を実行（MMF の参考結果）
-# MAGIC 7. ジョブ `[handson] 見本 初回のモデル作成` を実行
-# MAGIC 8. 見本 Genie Agent を画面から作る（`genie/README.md` 参照）
-# MAGIC 9. ⭐ **参加者 1 名で `HANDSON.md` を通しリハーサル**
+# MAGIC 5. `src/setup/run_mmf_reference` を実行（MMF の参考結果）
+# MAGIC 6. ジョブ `[handson] 見本 初回のモデル作成` を実行
+# MAGIC 7. 見本 Genie Agent を画面から作る（`genie/README.md` 参照）
+# MAGIC 8. ⭐ **参加者 1 名で `HANDSON.md` を通しリハーサル**
+# MAGIC
+# MAGIC ⭐ **見本ダッシュボードはデプロイで一緒に作られます**（手順不要）。
 # MAGIC
 # MAGIC ⚠️ **セット B の CSV は当日まで投入しないでください。**
 # MAGIC 「新しいデータが届いてテーブルが更新される」を見せるのが当日の山場です。

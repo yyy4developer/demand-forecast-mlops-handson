@@ -1,0 +1,21 @@
+# 完成見本のダッシュボード
+#
+# ⭐ 参加者は「これから作るもの」を先に見るために開きます。
+#    名前に「見本」を含めているのは、`01_dashboard` がその文字で探すためです。
+#
+# ⭐ dataset_catalog / dataset_schema を指定しているので、JSON 側のクエリは
+#    テーブル名だけ（カタログ・スキーマなし）で書いてあります。
+#
+# ⚠️ `warehouse_id` はワークスペースごとに違います。
+#    ⭐ `notebooks/admin/00_prepare_environment` が
+#    `.databricks/bundle/<target>/variable-overrides.json` に書き出すため、
+#    デプロイ時に値を渡す必要はありません（画面からのデプロイでも読まれます）。
+resources:
+  dashboards:
+    demand_overview_sample:
+      display_name: "[handson] 見本 需要予測 概況ダッシュボード"
+      file_path: ../dashboards/demand_overview.lvdash.json
+      parent_path: /Workspace/Users/${workspace.current_user.userName}
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${var.sample_schema}

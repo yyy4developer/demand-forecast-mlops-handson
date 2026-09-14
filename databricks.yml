@@ -31,6 +31,13 @@ variables:
   catalog:
     description: "ハンズオンで使うカタログ名"
     default: demand_forecast_handson
+  warehouse_id:
+    # ⚠️ ワークスペースごとに違うため、リポジトリには値を持たせません。
+    # ⭐ `notebooks/admin/00_prepare_environment` が
+    #    `.databricks/bundle/<target>/variable-overrides.json` に書き出すので、
+    #    デプロイ時に何も渡す必要はありません（画面のデプロイでも読まれます）。
+    description: "ダッシュボードが使う SQL ウェアハウス ID"
+    default: ""
   sample_schema:
     description: "検証済みの見本を全部置くスキーマ (参加者は読み取りのみ)"
     default: fc_sample

@@ -112,7 +112,9 @@ git diff --stat data/          # 差分が出なければ再現できている
 **画面からデプロイ**できます（`databricks.yml` は YAML のみ・変数ゼロ）。
 
 1. ⭐ `notebooks/admin/00_prepare_environment` を実行
-   （カタログ / SQL ウェアハウス / 参加者権限を作り、準備状況を表示します）
+   - カタログ / SQL ウェアハウス / 参加者権限を作ります
+   - ⭐⭐ ウェアハウス ID を **`.databricks/bundle/dev/variable-overrides.json`** に書き出すので、
+     デプロイ時に渡す値がなくなります
 2. ⭐ `databricks.yml` があるフォルダを開き、画面の **「デプロイ」** を押す
 
 > 💡 CLI がある場合はこちらでも同じです。
@@ -128,14 +130,15 @@ git diff --stat data/          # 差分が出なければ再現できている
 | 見本の CSV を置く Volume | `resources/volumes.yml` |
 | サンプルデータ投入ジョブ | `resources/job_setup.yml` |
 | 見本用の bronze → silver → gold パイプライン | `resources/pipeline_medallion.yml` |
+| 完成見本のダッシュボード | `resources/dashboard_sample.yml` |
 | 見本の月次ジョブ / 初回モデル作成ジョブ | `resources/jobs_mlops.yml` |
 
 ⚠️ **カタログと SQL ウェアハウスはこの bundle では作りません。**
 `notebooks/admin/00_prepare_environment` が作ります。⭐ **デプロイの前**に実行してください。
 
-⚠️ **見本ダッシュボードも bundle では作りません。**
-SQL ウェアハウスの ID が必要になり、画面からのデプロイができなくなるためです。
-⭐ `notebooks/admin/01_deploy_dashboard` が実行時に ID を見つけて作ります。
+⭐ ダッシュボードが必要とする SQL ウェアハウス ID は、同じノートブックが
+`.databricks/bundle/dev/variable-overrides.json`（Git 管理外）に書き出します。
+⭐ デプロイ時に自動で読まれるため、**渡す値はありません**。
 
 ⚠️ ワークスペースの URL は **プロファイルから解決される**ため `databricks.yml` には書いていません。
 別のワークスペースで使う場合は `databricks auth login` でプロファイルを作り、`-p` を差し替えてください。
