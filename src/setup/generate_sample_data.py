@@ -496,6 +496,52 @@ def write_csv(path: Path, rows: list[dict]) -> None:
     print(f"  {path.relative_to(REPO_ROOT)}: {len(rows):,} 行")
 
 
+
+def build_own_data_sample(spec: dict) -> list[dict]:
+    """⭐ 自由時間 (`99_your_own_data`) の練習用 CSV。
+
+    ⭐ **データを持ってきていない参加者**でも自由時間を体験できるようにするためのもの。
+    ⚠️ 見本データとは別物で、パイプラインには一切取り込みません。
+
+    ⭐ わざと「実データっぽい形」にしてあります（`99` の説明どおりに詰まるように）:
+
+    | 特徴 | 狙い |
+    |---|---|
+    | 列名が日本語 (`商品コード` / `年月` / `数量`) | ⭐ `99` の既定 `COLUMN_MAP` がそのまま通る |
+    | `年月` が `2024年1月` 形式 | ⭐ 月末日への変換処理を通す |
+    | `数量` が桁区切りつき (`1,234`) | ⭐ カンマ除去処理を通す |
+    | 30 か月 × 4 品目 | ⭐ ラグ 12 か月の特徴量が作れる長さ (24 か月以上) |
+    """
+    rng = np.random.default_rng(spec["meta"]["base_seed"] + 777)
+    rows: list[dict] = []
+    # 性質を作り分ける: 安定 / 成長 / 振れる / 出ない月がある
+    # (品目, 基準数量, 変動係数, 月次成長率, 出荷が起きる確率)
+    items = [
+        # ⭐ 4 桁にして「1,234」形式の桁区切りを発生させる（カンマ除去処理を通すため）
+        ("A-100", 2400, 0.10, 0.00, 1.0),   # 安定・大口
+        ("A-200", 900, 0.15, 0.02, 1.0),    # 成長トレンドあり
+        ("B-310", 60, 0.55, 0.00, 1.0),     # 数量が振れる
+        ("C-900", 25, 0.40, 0.00, 0.6),     # ⭐ 出ない月がある（間欠需要）
+    ]
+    for item, base, cv, growth, occur in items:
+        for i in range(30):
+            year = 2024 + (i // 12)
+            month = (i % 12) + 1
+            if rng.random() > occur:
+                qty = 0
+            else:
+                level = base * (1 + growth) ** i
+                # 12 か月周期の季節性を少し入れる
+                season = 1 + 0.18 * np.sin(2 * np.pi * (month - 1) / 12)
+                qty = max(0, int(round(rng.normal(level * season, level * cv))))
+            rows.append({
+                "商品コード": item,
+                "年月": f"{year}年{month}月",
+                # ⚠️ わざと桁区切りの文字列にする
+                "数量": f"{qty:,}",
+            })
+    return rows
+
 def main() -> int:
     spec = yaml.safe_load(SPEC_PATH.read_text(encoding="utf-8"))
     meta = spec["meta"]
@@ -515,6 +561,9 @@ def main() -> int:
     print("\n[出荷実績]")
     write_csv(DATA_DIR / "shipments_2020_2026_07.csv", set_a)
     write_csv(DATA_DIR / "shipments_2026_08.csv", set_b)
+
+    print("\n[自由時間の練習用]")
+    write_csv(DATA_DIR / "sample_own_data.csv", build_own_data_sample(spec))
 
     print("\n[マスタ]")
     write_csv(DATA_DIR / "dim_item.csv", build_dim_item(spec))
