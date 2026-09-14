@@ -1,0 +1,79 @@
+# ⭐⭐ 見本を一括で作るセットアップジョブ
+#
+# ⭐ deploy は「器」を作るだけで、中身は作りません。
+#    このジョブ 1 本で、見本 (fc_sample) が完成した状態まで持っていきます。
+#
+#   ① CSV を Volume に投入        (セット A = 2020-01 〜 2026-07)
+#        ↓
+#   ② メダリオンパイプラインを実行  (bronze → silver → gold)
+#        ↓
+#   ③ UC メタデータとメトリクスビューを適用
+#        ↓
+#   ④ ⭐ Genie Agent を作る        (③ の後でないと作れません)
+#        ↓
+#   ⑤ 初回モデルを作って @champion を付ける
+#
+# ⚠️ ④ を DAB リソースにすると deploy が 2 回必要になります（作成 API が
+#    参照テーブルの実在を検証し、③ より前には存在しないため）。
+#    ⭐ だからジョブのタスクにしています。詳細は docs/reference/genie_space_in_dab.yml。
+#
+# ⭐ 全タスク冪等です。失敗したところから再実行して構いません。
+resources:
+  jobs:
+    setup_all_sample:
+      name: "[handson] 00 見本を一括セットアップ"
+      # ⚠️ 失敗に気づかないのがいちばん困るので通知を入れる
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      queue:
+        enabled: true
+      tasks:
+        # ① CSV 投入
+        - task_key: load_csv
+          notebook_task:
+            notebook_path: ../src/setup/load_csv_to_volume.py
+            base_parameters:
+              bundle_file_path: ${workspace.file_path}
+              catalog: ${var.catalog}
+              schema: ${var.sample_schema}
+              volume: ${var.landing_volume}
+              load_set: "A"
+
+        # ② bronze → silver → gold
+        - task_key: run_pipeline
+          depends_on:
+            - task_key: load_csv
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.medallion_sample.id}
+
+        # ③ コメント / メトリクスビュー（⚠️ Genie の精度はここで決まる）
+        - task_key: apply_metadata
+          depends_on:
+            - task_key: run_pipeline
+          notebook_task:
+            notebook_path: ../notebooks/_uc_metadata.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.sample_schema}
+
+        # ④ ⭐ Genie Agent（③ が終わっていないと API に弾かれる）
+        - task_key: create_genie
+          depends_on:
+            - task_key: apply_metadata
+          notebook_task:
+            notebook_path: ../src/setup/create_genie_space.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.sample_schema}
+              warehouse_id: ${var.warehouse_id}
+
+        # ⑤ 初回モデル → @champion
+        - task_key: initial_train
+          depends_on:
+            - task_key: apply_metadata
+          notebook_task:
+            notebook_path: ../notebooks/04_train_register.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.sample_schema}

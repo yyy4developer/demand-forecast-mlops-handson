@@ -83,14 +83,3 @@ resources:
     #
     # ⚠️ 上の月次ジョブは「今の本番と比べる」処理なので、
     #    比べる相手（@champion）が無いと動きません。最初に 1 回これを回します。
-    initial_train_sample:
-      name: "[handson] 見本 初回のモデル作成（1 回だけ）"
-      queue:
-        enabled: true
-      tasks:
-        - task_key: train
-          notebook_task:
-            notebook_path: ../notebooks/04_train_register.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${var.sample_schema}

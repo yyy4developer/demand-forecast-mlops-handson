@@ -16,20 +16,18 @@
    STEP 1  Git フォルダにこのリポジトリを clone
    STEP 2  notebooks/admin/00_prepare_environment を実行
               └─ カタログ / SQL ウェアハウス / 権限 / 変数ファイル
-   STEP 3  ⭐ 画面から「デプロイ」          ← 渡す値なし
+   STEP 3  ⭐ 画面から「デプロイ」（1 回だけ）  ← 渡す値なし
               └─ ここで作られるのは「器」。データはまだ入っていません
-              └─ ⚠️ Genie Agent だけ失敗します（想定どおり / STEP 6.5 で作ります）
-   STEP 4  サンプルデータを Volume に投入（load_set = A）
-   STEP 5  見本パイプラインを実行
-   STEP 6  _uc_metadata を schema = fc_sample で実行
-   STEP 6.5 ⭐⭐ もう一度デプロイ  ← ここで初めて Genie Agent が作られる
-   STEP 7  ダッシュボード / Genie Agent に CAN VIEW を付ける
-   STEP 8  MMF の参考結果を作る / 初回モデルを作る
-   STEP 9  当日直前のウォームアップ
-   STEP 10 ⭐ 参加者 1 名で通しリハーサル
+   STEP 4  ⭐⭐ ジョブ「00 見本を一括セットアップ」を Run
+              └─ CSV 投入 → パイプライン → メタデータ → Genie Agent → 初回モデル
+              └─ ⭐ 見本 (fc_sample) がここで完成します
+   STEP 5  ダッシュボード / Genie Agent に CAN VIEW を付ける
+   STEP 6  MMF の参考結果を作る（`08` を触らせる場合のみ）
+   STEP 7  当日直前のウォームアップ
+   STEP 8  ⭐ 参加者 1 名で通しリハーサル
 ```
 
-⚠️⚠️ **STEP 3 のデプロイでデータは入りません。** STEP 4〜8 が必要です。
+⚠️⚠️ **STEP 3 のデプロイでデータは入りません。** ⭐ **STEP 4 のジョブ 1 本**で入ります。
 
 ## ⭐ 設定ファイルを触る必要はありません
 
@@ -146,29 +144,19 @@ Git フォルダにこのリポジトリを取り込み、画面から bundle �
 2. 画面に出る **「デプロイ」** を押す
 3. ⭐ **渡す値はありません。** そのままデプロイできます
 
-> ⚠️⚠️⚠️ **1 回目は Genie Agent だけ失敗します。想定どおりなので進んでください。**
+> ⭐ **デプロイは 1 回だけです。**
 >
-> ```
-> Error: cannot create resources.genie_spaces.demand_agent_sample:
->   Failed to fetch tables for the agent.
->   Table '<catalog>.fc_sample.mv_demand' does not exist  (403 PERMISSION_DENIED)
-> ```
+> ⚠️ かつては Genie Agent も bundle に入れていましたが、作成 API が
+> **参照テーブルの実在を検証する**ため、メトリクスビューができる前の
+> デプロイでは必ず失敗し、2 回デプロイする必要がありました。
 >
-> ⭐ Genie Agent の作成 API は**参照テーブルが実在するかを検証します**。
-> ところが `mv_demand` / `mv_forecast_accuracy` は
-> **デプロイ → CSV 投入 → パイプライン実行 → gold → メトリクスビュー**
-> の順にできるので、⚠️ デプロイの時点では存在しません。
->
-> ⚠️ `403 PERMISSION_DENIED` と出ますが、**権限の問題ではありません**（中身は「テーブルが無い」）。
->
-> ⭐⭐ **他のリソースは 1 回目で全部作られます**（実機で確認済み）:
-> スキーマ / Volume / パイプライン / ジョブ 3 本 / ダッシュボード / ⭐ **権限付与も**。
->
-> ⭐ Genie Agent は **STEP 6.5 でもう一度デプロイ**すると作られます。
+> ⭐ 今は Genie Agent を **STEP 4 のジョブのタスク**で作るので、デプロイは 1 回です。
+> DAB で書く場合の定義は `docs/reference/genie_space_in_dab.yml` に残してあります。
 
-⭐ 作られるもの: 見本スキーマ `fc_sample` / その Volume `landing` /
-データ投入ジョブ / 見本パイプライン / ⭐ **見本ダッシュボード** /
-見本の月次ジョブ / 初回モデル作成ジョブ
+⭐ 作られるもの（**器だけ**）:
+見本スキーマ `fc_sample`（⭐ 権限つき）/ その Volume `landing`（⭐ 権限つき）/
+見本パイプライン / ⭐ **見本ダッシュボード** /
+ジョブ 3 本（⭐ **00 見本を一括セットアップ** / 01 サンプルデータ投入 / 見本の月次更新）
 
 > 💡 CLI を持っている場合は次でも同じです（CI/CD や別ワークスペースへの配置はこちら）。
 >
@@ -176,9 +164,6 @@ Git フォルダにこのリポジトリを取り込み、画面から bundle �
 > databricks bundle validate -t dev -p <profile>
 > databricks bundle deploy   -t dev -p <profile>
 > ```
-
-作られるもの: 見本スキーマ `fc_sample` / その Volume `landing` /
-データ投入ジョブ / 見本用パイプライン / 見本ダッシュボード / 見本の月次ジョブ
 
 ⚠️ **参加者ごとのスキーマと Volume は作りません。** 参加者が `00` を実行したときに
 自分で作ります（`notebooks/_config.py` が担当）。
@@ -194,74 +179,58 @@ SHOW GRANTS ON VOLUME <catalog>.fc_sample.landing;  -- READ VOLUME
 **アカウントグループとして実在するか**を確認してください。
 ⚠️ ワークスペースローカルのグループは UC の GRANT に使えません。
 
-## STEP 4 — サンプルデータを投入（⚠️ セット A だけ）
+## STEP 4 — ⭐⭐ ジョブ 1 本で見本を完成させる
 
-ジョブ **`[handson] 01 サンプルデータを Volume に投入`** を **`load_set = A`** で実行。
+ジョブ **`[handson] 00 見本を一括セットアップ`** を **「今すぐ実行」**。
 
-⚠️⚠️ **セット B（`shipments_2026_08.csv`）は当日まで投入しないでください。**
-「新しいデータが届いてテーブルが更新される」を見せるのが当日の山場です。
+⭐ これ 1 本で、見本 `fc_sample` が完成した状態まで進みます。
 
-## STEP 5 — 見本の gold を作る
+| # | タスク | 内容 |
+|---|---|---|
+| ① | `load_csv` | CSV を Volume に投入（⚠️ **セット A だけ** = 2020-01 〜 2026-07） |
+| ② | `run_pipeline` | bronze → silver → gold |
+| ③ | `apply_metadata` | コメント + ⭐ **メトリクスビュー 2 本** |
+| ④ | ⭐ `create_genie` | ⭐ **見本 Genie Agent**（③ の後でないと API に弾かれます） |
+| ⑤ | `initial_train` | 初回モデル → `@champion` |
 
-パイプライン **`[handson] 見本 メダリオンパイプライン`** を実行。
-`fc_sample` に gold 7 テーブルができます。
+⭐ ④ と ⑤ は ③ の後に**並列**で走ります。
 
-⚠️ サーバーレスの初回起動に **4〜6 分**かかります。
+> ⭐ **全タスク冪等です。** 失敗しても、直してもう一度 Run すれば大丈夫です。
+> ⚠️ 失敗時は自分にメール通知が飛ぶ設定にしてあります。
 
-## STEP 6 — 見本用のメタデータとメトリクスビュー
+> ⚠️⚠️ **セット B（`shipments_2026_08.csv`）は投入されません。** これは当日の見せ場です。
+> 詳細は下の「当日の進め方」を読んでください。
 
-ノートブック `notebooks/_uc_metadata` を **`schema = fc_sample`** で実行。
-⭐ 単体で動くようになっているので、ジョブから `base_parameters` で渡しても構いません。
+### ⭐ 完了したか確認する
 
-⚠️ これを飛ばすと、見本 Genie Agent の回答精度が出ません。
-
-## STEP 6.5 — ⭐⭐ もう一度デプロイして Genie Agent を作る
-
-⭐ **STEP 6 でメトリクスビューができたので、ここで初めて Genie Agent が作れます。**
-
-1. Git フォルダの **`databricks.yml` があるフォルダ**を開く
-2. **「デプロイ」** をもう一度押す
-
-⭐ 今度は成功します。作られるのは Genie Agent 1 つだけで、
-他のリソースは変更なしとして扱われます。
-
-### ⭐ 成功したか確認する
+```sql
+SELECT MIN(ym), MAX(ym), COUNT(*) FROM <catalog>.fc_sample.fct_shipments;
+-- ⭐ 2020-01-31 / 2026-07-31 / 3081 行
+SHOW TABLES IN <catalog>.fc_sample LIKE 'mv_*';
+-- ⭐ mv_demand / mv_forecast_accuracy
+```
 
 ```bash
 databricks api get "/api/2.0/genie/spaces?page_size=20" -p <profile>
+# ⭐ [handson] 見本 需要分析エージェント が 1 件
 ```
 
-⭐ `[handson] 見本 需要分析エージェント` が 1 件返れば完了です。
+> 💡 **CSV を入れ直したいだけのとき**は、ジョブ
+> `[handson] 01 サンプルデータを Volume に投入` を単体で回せます
+> （`load_set` に `A` / `B` / `all` を渡せます）。
 
-> ⚠️ ここで失敗する場合は、STEP 6 のメトリクスビューが本当にできているか確認してください。
->
-> ```sql
-> SHOW TABLES IN <catalog>.fc_sample LIKE 'mv_*';   -- mv_demand / mv_forecast_accuracy
-> ```
+## STEP 5 — ⚠️ ダッシュボードと Genie Agent に `CAN VIEW` を付ける
 
-> 💡 **なぜ 2 回に分かれるのか（設計上の制約）**
->
-> Genie Agent は参照テーブルの実在を要求し、そのテーブルはデプロイが作った
-> パイプラインを**実行してから**できます。⚠️ 1 回のデプロイでは順序を満たせません。
-> ⭐ Genie Agent を bundle の外（ノートブックから REST で作成）に出せば 1 回で済みますが、
-> ⭐ **「Genie Agent も DAB で管理できる」ことを示すため** bundle に残しています。
+⭐ どちらも作成済みです。⚠️ **共有設定だけ手作業です。**
 
----
+1. 見本ダッシュボードを開く → 右上 **「共有」** → 参加者グループに **`CAN VIEW`**
+2. 見本 Genie Agent を開く → 同じく **`CAN VIEW`**
 
-## STEP 7 — 見本のダッシュボードと Genie Agent
+⚠️ どちらも**開いた人の権限**でクエリを実行します。
+⭐ 参加者が見本スキーマを読める権限は **STEP 3 のデプロイ**が付けています
+（`USE SCHEMA` / `SELECT`）。
 
-⭐ **ダッシュボードは STEP 3 のデプロイで、Genie Agent は STEP 6.5 のデプロイで作られています。**
-作成作業は不要です。
-
-⚠️ **参加者グループに `CAN VIEW` を付けてください**（それぞれの画面の「共有」から）。
-⚠️ どちらも**開いた人の権限**でクエリを実行するため、
-参加者が見本スキーマを読めないと開いてもエラーになります
-（⭐ **STEP 3 のデプロイ**が `USE SCHEMA` / `SELECT` を付けています）。
-
-> ⭐ Genie Agent の定義（`resources/genie_sample.yml`）は公開ドキュメントに形式が無く、
-> API を試して特定しました。要点は同ファイルのコメントに書いてあります。
-
-## STEP 8 — MMF のスキルを配置（`08` を触らせる場合）
+## STEP 6 — MMF の参考結果を作る（`08` を触らせる場合）
 
 ⚠️ **参加者全員のフォルダに配置**が必要です。配置しないとスキルが読み込まれず、
 AI が手順を無視して勝手に進みます。
@@ -283,7 +252,7 @@ databricks workspace import skills/assistant_instructions.md \
 ⚠️ MMF は Databricks の正式サポート対象外（AS-IS）で、**DBR 18 for ML 以上**が必要です。
 ⭐ CPU だけで動くモデルに絞れば GPU は不要です。
 
-## STEP 8.5 — ⭐ 見本ジョブを一度動かしておく
+## STEP 6.5 — ⭐ 月次ジョブを一度動かしておく（任意）
 
 ⭐ `07_jobs` の答え合わせ用に、動くお手本を用意してあります。
 
@@ -325,14 +294,14 @@ databricks api post "/api/2.0/pipelines/<pipeline_id>/updates" --json '{"full_re
 > ままになりますが、⭐ **参加者はどちらも参照しません**
 > （`00` が比べるのは gold 7 テーブルの行数、`08` が読むのは `scm_*` だけ）。
 
-## STEP 9 — 当日直前のウォームアップ
+## STEP 7 — 当日直前のウォームアップ
 
 - [ ] SQL ウェアハウスを起動しておく
 - [ ] 見本パイプラインを 1 回空実行しておく
 - [ ] ⚠️ **セット B はまだ投入しない**（`fc_sample.fct_shipments` の最終月が **2026-07-31** であることを確認）
 - [ ] ⭐ `data/shipments_2026_08.csv` を参加者に配る準備（Slack の下書きまで作っておく）
 
-## STEP 10 — ⭐ 参加者 1 名での通しリハーサル
+## STEP 8 — ⭐ 参加者 1 名での通しリハーサル
 
 ⚠️⚠️ **最重要。** 管理者アカウントではなく、**参加者グループの権限だけを持つアカウント**で
 `HANDSON.md` を上から読み、書かれている通りにだけ操作して最後まで通してください。

@@ -12,6 +12,7 @@
 # MAGIC |---|---|
 # MAGIC | 参加者のスキーマ | `fc_ws_*` とその中のテーブル・**Volume**・モデルすべて |
 # MAGIC | 参加者のパイプライン | `[handson] * のメダリオンパイプライン` |
+# MAGIC | ⭐ 見本の Genie Agent | `[handson] 見本 *`（⚠️ **DAB 管理外**なので `bundle destroy` では消えません） |
 # MAGIC
 # MAGIC ## 消えないもの（別途）
 # MAGIC
@@ -83,6 +84,41 @@ if not dry_run:
         api.do("DELETE", f"/api/2.0/pipelines/{p['pipeline_id']}")
         print(f"  🗑 削除しました: {p.get('name')}")
 elif pipes:
+    print("\n（確認モードです。実際に消すには dry_run を false にしてください）")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## ⭐ 見本の Genie Agent を消す
+# MAGIC
+# MAGIC ⚠️ **Genie Agent は DAB 管理外**（`src/setup/create_genie_space.py` が REST で作成）
+# MAGIC なので、`bundle destroy` では消えません。ここで消します。
+
+# COMMAND ----------
+
+from databricks.sdk import WorkspaceClient
+
+_w = WorkspaceClient()
+_api = _w.api_client
+
+_spaces = [
+    sp for sp in ((_api.do("GET", "/api/2.0/genie/spaces?page_size=100") or {}).get("spaces") or [])
+    if (sp.get("title") or "").startswith("[handson] 見本")
+]
+
+if not _spaces:
+    print("見本の Genie Agent は見つかりませんでした。")
+for sp in _spaces:
+    if dry_run:
+        print(f"  [確認] 消す予定: {sp['title']}  ({sp['space_id']})")
+    else:
+        try:
+            _api.do("DELETE", f"/api/2.0/genie/spaces/{sp['space_id']}")
+            print(f"  ✅ 消しました: {sp['title']}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ 消せませんでした: {sp['title']}  {str(e).splitlines()[0][:120]}")
+
+if _spaces and dry_run:
     print("\n（確認モードです。実際に消すには dry_run を false にしてください）")
 
 # COMMAND ----------
