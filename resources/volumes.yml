@@ -1,18 +1,20 @@
-# CSV の投入先 Volume
+# 見本の CSV を置く Volume
 #
-# 配下は取り込み対象ごとにディレクトリを分ける:
+# 配下は取り込み対象ごとにディレクトリを分けます:
 #   shipments/         月次出荷実績        (★ 当日ここに新しい CSV を置く)
 #   items/             品目マスタ
 #   channels/          チャネル定義
 #   inventory/         月末在庫
 #   lead_time/         標準リードタイム
 #   forecast_baseline/ 前年同月ナイーブのベースライン予測
-#   your_own_data/     参加者が自分のデータを置く場所 (自由時間用)
+#
+# ⭐ 参加者は**自分のスキーマにも同じ構成の Volume を作り**、
+#    ここから CSV をコピーして取り込みます（`notebooks/_config.py` が自動で作成）。
 resources:
   volumes:
     landing:
       catalog_name: ${var.catalog}
-      schema_name: ${var.shared_schema}
+      schema_name: ${var.sample_schema}
       name: ${var.landing_volume}
       volume_type: MANAGED
-      comment: "サンプル CSV と参加者データの取り込み用 Volume"
+      comment: "見本のサンプル CSV。参加者はここから自分の Volume にコピーする。"

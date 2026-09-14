@@ -14,15 +14,19 @@
 # MAGIC - 手で名前を決める必要はありません。**このファイルは編集せずそのまま実行**してください
 # MAGIC - 自分のスキーマ名は各ノートブック冒頭の出力で確認できます
 # MAGIC
-# MAGIC ## 📦 スキーマの役割分担
+# MAGIC ## 📦 スキーマは 2 つだけ
 # MAGIC
 # MAGIC | スキーマ | 中身 | あなたの権限 |
 # MAGIC |---|---|---|
-# MAGIC | `fc_shared` | CSV を置く Volume だけ | 読み取り（＋自由時間用に書き込み） |
-# MAGIC | `fc_sample` | 完成見本の gold テーブル | 読み取りのみ |
-# MAGIC | ⭐ `fc_ws_<あなた>` | **あなたが作るものすべて** | 自由に読み書き |
+# MAGIC | `fc_sample` | ⭐ **検証済みの見本すべて**（CSV / テーブル / メトリクスビュー / モデル / ダッシュボード） | 読み取りのみ |
+# MAGIC | ⭐ `fc_ws_<あなた>` | ⭐ **あなたが同じものを作る場所**（Volume も含む） | 自由に読み書き |
 # MAGIC
-# MAGIC > ⭐ **なぜ参加者ごとに bronze→gold を作るのか**
+# MAGIC > ⭐⭐ **今日のゴールは「見本を自分のスキーマに再現すること」です。**
+# MAGIC >
+# MAGIC > 見本 (`fc_sample`) には、これから作るものが**全部すでに入っています**。
+# MAGIC > 困ったら中を見て、同じものを自分のスキーマに作ってください。
+# MAGIC
+# MAGIC > ⭐ **なぜ一人ずつ全部作るのか**
 # MAGIC >
 # MAGIC > 本来のデータ基盤なら、bronze → silver → gold は**共通のスキーマに 1 セット**作り、
 # MAGIC > 全員がそれを参照します。今回は「**取り込みから自分の手で体験する**」ことが目的なので、
@@ -35,12 +39,10 @@
 # ハンズオンで使うカタログ名
 DEFAULT_CATALOG = "demand_forecast_handson"
 
-# CSV を置く Volume があるスキーマ
-SHARED_SCHEMA = "fc_shared"
-# CSV を置く Volume 名
-LANDING_VOLUME = "landing"
-# 完成見本の gold があるスキーマ
+# 検証済みの見本が入っているスキーマ
 SAMPLE_SCHEMA = "fc_sample"
+# CSV を置く Volume 名（見本にも、あなたのスキーマにも同じ名前で作ります）
+LANDING_VOLUME = "landing"
 
 # 参加者ごとのスキーマ名のプレフィックス
 SCHEMA_PREFIX = "fc_ws"
@@ -88,14 +90,18 @@ except Exception:
 
 # よく使うパスをまとめておく
 MY = f"{catalog}.{schema}"
-SHARED = f"{catalog}.{SHARED_SCHEMA}"
 SAMPLE = f"{catalog}.{SAMPLE_SCHEMA}"
-LANDING_PATH = f"/Volumes/{catalog}/{SHARED_SCHEMA}/{LANDING_VOLUME}"
+# 見本の CSV（読み取り専用）
+SAMPLE_LANDING = f"/Volumes/{catalog}/{SAMPLE_SCHEMA}/{LANDING_VOLUME}"
+# ⭐ あなた専用の CSV 置き場（自分で読み書きできます）
+LANDING_PATH = f"/Volumes/{catalog}/{schema}/{LANDING_VOLUME}"
 
-# 自分のスキーマを作る（何度実行しても安全）
+# ⭐ 自分のスキーマと Volume を作る（何度実行しても安全）
 spark.sql(f"USE CATALOG {catalog}")
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {MY}")
 spark.sql(f"USE SCHEMA {schema}")
+spark.sql(f"CREATE VOLUME IF NOT EXISTS {MY}.{LANDING_VOLUME} "
+          f"COMMENT 'あなたの CSV 置き場。見本からコピーしたものと、自分で持ち込んだものを置きます。'")
 
 # ⭐ SQL ウェアハウスの ID を自動で見つける。
 #    一部の機能（ai_forecast など）は SQL ウェアハウス上でしか動かないため、
@@ -119,10 +125,12 @@ def _find_warehouse_id() -> str:
 
 WAREHOUSE_ID = _find_warehouse_id()
 
-print("=" * 68)
-print(f"  あなたの作業スキーマ : {MY}")
-print(f"  CSV の置き場         : {LANDING_PATH}")
-print(f"  完成見本             : {SAMPLE}")
-print(f"  SQL ウェアハウス     : {WAREHOUSE_ID or '(見つかりませんでした)'}")
-print("=" * 68)
+print("=" * 74)
+print(f"  ⭐ あなたの作業スキーマ : {MY}")
+print(f"     あなたの CSV 置き場 : {LANDING_PATH}")
+print(f"  ⭐ 見本（読み取り専用） : {SAMPLE}")
+print(f"     見本の CSV          : {SAMPLE_LANDING}")
+print(f"     SQL ウェアハウス    : {WAREHOUSE_ID or '(見つかりませんでした)'}")
+print("=" * 74)
 print("※ 以降のノートブックは、あなたの作業スキーマに対して実行されます")
+print("※ 詰まったら見本スキーマの中身を見てください。同じものが入っています")

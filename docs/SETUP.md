@@ -40,8 +40,11 @@ databricks bundle validate -t dev -p <profile>
 databricks bundle deploy   -t dev -p <profile>
 ```
 
-作られるもの: 共有スキーマ `fc_shared` / 見本用スキーマ `fc_sample` /
-Volume `landing` / データ投入ジョブ / 見本用パイプライン
+作られるもの: 見本スキーマ `fc_sample` / その Volume `landing` /
+データ投入ジョブ / 見本用パイプライン / 見本ダッシュボード / 見本の月次ジョブ
+
+⚠️ **参加者ごとのスキーマと Volume は作りません。** 参加者が `00` を実行したときに
+自分で作ります（`notebooks/_config.py` が担当）。
 
 ## STEP 4 — サンプルデータを投入（⚠️ セット A だけ）
 
@@ -59,7 +62,8 @@ Volume `landing` / データ投入ジョブ / 見本用パイプライン
 
 ## STEP 6 — 見本用のメタデータとメトリクスビュー
 
-ノートブック `notebooks/_uc_metadata` を、**`TARGET` を `<catalog>.fc_sample` にして**実行。
+ノートブック `notebooks/_uc_metadata` を **`schema = fc_sample`** で実行。
+⭐ 単体で動くようになっているので、ジョブから `base_parameters` で渡しても構いません。
 
 ⚠️ これを飛ばすと、見本 Genie Agent の回答精度が出ません。
 

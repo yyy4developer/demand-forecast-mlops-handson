@@ -20,7 +20,6 @@
 # MAGIC | `inventory/` | 月末在庫・安全在庫・欠品フラグ |
 # MAGIC | `lead_time/` | 品目 × 拠点の標準リードタイム |
 # MAGIC | `forecast_baseline/` | 前年同月ナイーブのベースライン予測 |
-# MAGIC | `your_own_data/` | 参加者が自分のデータを置く場所（自由時間用・空で作る） |
 # MAGIC
 # MAGIC ## `load_set` パラメータ
 # MAGIC
@@ -38,7 +37,7 @@
 
 dbutils.widgets.text("bundle_file_path", "", "bundle のファイルパス")
 dbutils.widgets.text("catalog", "demand_forecast_handson", "カタログ")
-dbutils.widgets.text("schema", "fc_shared", "共有スキーマ")
+dbutils.widgets.text("schema", "fc_sample", "見本スキーマ")
 dbutils.widgets.text("volume", "landing", "Volume 名")
 dbutils.widgets.dropdown("load_set", "A", ["A", "B", "all"], "投入するセット")
 
@@ -91,8 +90,9 @@ FILE_MAP = [
     ("fct_forecast_baseline.csv", "forecast_baseline", "A"),
 ]
 
-# 参加者が自分のデータを置く場所は空のまま作る
-EMPTY_DIRS = ["your_own_data"]
+# 見本の Volume には参加者用のディレクトリは作りません
+# （参加者は自分のスキーマの Volume に置きます）
+EMPTY_DIRS: list[str] = []
 
 wanted = {"A", "B"} if load_set == "all" else {load_set}
 

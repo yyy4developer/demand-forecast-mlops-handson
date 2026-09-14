@@ -34,8 +34,7 @@
 # MAGIC 2. 下のセルに出るパスまで降りる
 # MAGIC 3. 右上 **「このボリュームにアップロード」** から CSV を選ぶ
 # MAGIC
-# MAGIC > ⚠️ **他の参加者も同じ場所を使います。** ファイル名に自分の名前を入れてください。
-# MAGIC > 例: `yamada_売上実績.csv`
+# MAGIC > ⭐ **ここはあなた専用の Volume です。** 他の参加者には見えません。
 # MAGIC
 # MAGIC > ⚠️ **社外に出せないデータは置かないでください。** この環境は検証用です。
 # MAGIC > 迷ったら、数行だけ抜いたサンプルにするか、数値を変えたものを使ってください。
@@ -43,17 +42,18 @@
 # COMMAND ----------
 
 MY_UPLOAD_DIR = f"{LANDING_PATH}/your_own_data"
+dbutils.fs.mkdirs(MY_UPLOAD_DIR)
 print("CSV をここにアップロードしてください:")
 print(f"  {MY_UPLOAD_DIR}")
 print()
 print("カタログ画面での場所:")
-print(f"  {catalog}  →  {SHARED_SCHEMA}  →  ボリューム  →  {LANDING_VOLUME}  →  your_own_data")
+print(f"  {catalog}  →  {schema}  →  ボリューム  →  {LANDING_VOLUME}  →  your_own_data")
 
 from databricks.sdk import WorkspaceClient
 
 w = WorkspaceClient()
 displayHTML(
-    f'<a href="{w.config.host}/explore/data/volumes/{catalog}/{SHARED_SCHEMA}/{LANDING_VOLUME}" '
+    f'<a href="{w.config.host}/explore/data/volumes/{catalog}/{schema}/{LANDING_VOLUME}" '
     'target="_blank">▶ Volume を画面で開く</a>'
 )
 

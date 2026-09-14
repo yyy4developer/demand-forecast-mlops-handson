@@ -24,13 +24,11 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog", "demand_forecast_handson", "カタログ")
-dbutils.widgets.text("shared_schema", "fc_shared", "CSV 用スキーマ")
 dbutils.widgets.text("sample_schema", "fc_sample", "見本用スキーマ")
 dbutils.widgets.text("volume", "landing", "Volume 名")
 dbutils.widgets.text("participant_group", "handson-participants", "参加者グループ")
 
 catalog = dbutils.widgets.get("catalog")
-shared_schema = dbutils.widgets.get("shared_schema")
 sample_schema = dbutils.widgets.get("sample_schema")
 volume = dbutils.widgets.get("volume")
 group = dbutils.widgets.get("participant_group")
@@ -64,9 +62,11 @@ print("   databricks bundle deploy -t dev -p <profile>")
 # MAGIC |---|---|
 # MAGIC | `USE CATALOG` | カタログを開くため |
 # MAGIC | ⭐ `CREATE SCHEMA` | **自分専用のスキーマを自分で作るため** |
-# MAGIC | `USE SCHEMA` / `SELECT`（CSV 用・見本用） | 共有データと見本を読むため |
-# MAGIC | `READ VOLUME` | CSV を読むため |
-# MAGIC | ⭐ `WRITE VOLUME` | **自由時間に自分のデータを置くため** |
+# MAGIC | `USE SCHEMA` / `SELECT`（見本） | 見本を読み、自分のスキーマに再現するため |
+# MAGIC | ⭐ `READ VOLUME`（見本） | **見本の CSV を自分の Volume にコピーするため** |
+# MAGIC
+# MAGIC ⭐ 参加者は**自分のスキーマと Volume を自分で作る**ので、
+# MAGIC そこへの書き込み権限は自動的に持ちます（作成者が所有者になります）。
 # MAGIC
 # MAGIC ⚠️ **これ以外に UI 側で必要なもの**（このノートブックでは付けられません）:
 # MAGIC
@@ -79,16 +79,13 @@ print("   databricks bundle deploy -t dev -p <profile>")
 
 GRANTS = [
     f"GRANT USE CATALOG ON CATALOG {catalog} TO `{group}`",
-    # 参加者が自分のスキーマ fc_ws_<user> を作れるようにする
+    # ⭐ 参加者が自分のスキーマ fc_ws_<user> と Volume を作れるようにする
     f"GRANT CREATE SCHEMA ON CATALOG {catalog} TO `{group}`",
-    # CSV 用スキーマ（Volume を読むため）
-    f"GRANT USE SCHEMA ON SCHEMA {catalog}.{shared_schema} TO `{group}`",
-    f"GRANT READ VOLUME ON VOLUME {catalog}.{shared_schema}.{volume} TO `{group}`",
-    # 自由時間に自分の CSV を置くため
-    f"GRANT WRITE VOLUME ON VOLUME {catalog}.{shared_schema}.{volume} TO `{group}`",
-    # 見本用スキーマ（読み取りのみ）
+    # 見本スキーマ（読み取りのみ）
     f"GRANT USE SCHEMA ON SCHEMA {catalog}.{sample_schema} TO `{group}`",
     f"GRANT SELECT ON SCHEMA {catalog}.{sample_schema} TO `{group}`",
+    # ⭐ 見本の CSV を自分の Volume にコピーするため（読み取りだけで足ります）
+    f"GRANT READ VOLUME ON VOLUME {catalog}.{sample_schema}.{volume} TO `{group}`",
 ]
 
 ok, failed = 0, []
@@ -116,9 +113,8 @@ if failed:
 
 for target, kind in [
     (f"CATALOG {catalog}", "カタログ"),
-    (f"SCHEMA {catalog}.{shared_schema}", "CSV 用スキーマ"),
-    (f"SCHEMA {catalog}.{sample_schema}", "見本用スキーマ"),
-    (f"VOLUME {catalog}.{shared_schema}.{volume}", "Volume"),
+    (f"SCHEMA {catalog}.{sample_schema}", "見本スキーマ"),
+    (f"VOLUME {catalog}.{sample_schema}.{volume}", "見本の Volume"),
 ]:
     print(f"\n[{kind}] {target}")
     try:

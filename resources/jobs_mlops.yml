@@ -44,7 +44,7 @@ resources:
             base_parameters:
               bundle_file_path: ${workspace.file_path}
               catalog: ${var.catalog}
-              schema: ${var.shared_schema}
+              schema: ${var.sample_schema}
               volume: ${var.landing_volume}
               # ⭐ 当日は "B"（新しい月）。運用では毎月の新ファイルを置く処理に置き換えます。
               load_set: "B"

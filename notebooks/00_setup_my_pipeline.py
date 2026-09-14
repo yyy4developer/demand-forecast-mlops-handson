@@ -8,19 +8,26 @@
 # MAGIC
 # MAGIC ## このノートブックでやること
 # MAGIC
-# MAGIC 1. **あなた専用のスキーマ**を作る
-# MAGIC 2. **あなた専用のパイプライン**を作る（CSV → bronze → silver → gold）
-# MAGIC 3. 実行して、**あなたのスキーマに gold テーブルができる**のを確認する
+# MAGIC 1. **あなた専用のスキーマと Volume** を作る
+# MAGIC 2. ⭐ **見本の CSV を自分の Volume にコピーする**
+# MAGIC 3. **あなた専用のパイプライン**を作る（CSV → bronze → silver → gold）
+# MAGIC 4. 実行して、**あなたのスキーマに gold テーブルができる**のを確認する
 # MAGIC
 # MAGIC ```
-# MAGIC   fc_shared/landing/          ← CSV（全員で共有・読み取り専用）
-# MAGIC          │
-# MAGIC          ▼  あなたのパイプライン
+# MAGIC   fc_sample/landing/          ← 見本の CSV（読み取り専用）
+# MAGIC          │  ② コピー
+# MAGIC          ▼
+# MAGIC   fc_ws_<あなた>/landing/      ← あなたの CSV 置き場
+# MAGIC          │  ③④ あなたのパイプライン
+# MAGIC          ▼
 # MAGIC   fc_ws_<あなた>/
 # MAGIC      bronze_*  ← 届いたまま
 # MAGIC      silver_*  ← 重複排除・月末日に正規化
 # MAGIC      gold      ← fct_shipments / dim_item / fct_inventory / ...
 # MAGIC ```
+# MAGIC
+# MAGIC ⭐⭐ **ゴールは「見本 (`fc_sample`) を自分のスキーマに再現すること」です。**
+# MAGIC 見本には完成形が全部入っているので、詰まったら中を見比べてください。
 # MAGIC
 # MAGIC > ⭐ **なぜ一人ずつパイプラインを作るのか**
 # MAGIC >
@@ -67,7 +74,62 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 1. パイプラインを作る
+# MAGIC ## 1. ⭐ 見本の CSV を自分の Volume にコピーする
+# MAGIC
+# MAGIC ⭐ 見本の Volume は**読み取り専用**なので、自分の Volume にコピーしてから取り込みます。
+# MAGIC
+# MAGIC ⚠️ **すでにあるファイルは上書きしません**（何度実行しても安全です）。
+# MAGIC ⭐ ハンズオン中に見本へ**新しい月の CSV が追加**されたら、
+# MAGIC このセルをもう一度実行すれば差分だけコピーされます。
+
+# COMMAND ----------
+
+import os
+import shutil
+
+copied, skipped = [], []
+for sub in sorted(os.listdir(SAMPLE_LANDING)):
+    src_dir = f"{SAMPLE_LANDING}/{sub}"
+    if not os.path.isdir(src_dir):
+        continue
+    dst_dir = f"{LANDING_PATH}/{sub}"
+    dbutils.fs.mkdirs(dst_dir)
+    for name in sorted(os.listdir(src_dir)):
+        src, dst = f"{src_dir}/{name}", f"{dst_dir}/{name}"
+        if os.path.exists(dst):
+            skipped.append(f"{sub}/{name}")
+            continue
+        shutil.copyfile(src, dst)
+        copied.append(f"{sub}/{name}")
+
+if copied:
+    print("コピーしました:")
+    for c in copied:
+        print(f"  ✅ {c}")
+if skipped:
+    print("\nすでにあるので飛ばしました:")
+    for s in skipped:
+        print(f"  ⏭  {s}")
+if not copied and not skipped:
+    print("⚠️ 見本の CSV が見つかりませんでした。講師に確認してください。")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 自分の Volume の中身を確認する
+
+# COMMAND ----------
+
+for sub in sorted(os.listdir(LANDING_PATH)):
+    d = f"{LANDING_PATH}/{sub}"
+    if os.path.isdir(d):
+        entries = sorted(os.listdir(d))
+        print(f"  {sub + '/':<22} {', '.join(entries) if entries else '(空)'}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 2. パイプラインを作る
 # MAGIC
 # MAGIC ⭐ 画面から作ることもできますが、ここでは **API を 1 回呼ぶだけ**にしています。
 # MAGIC 「同じ SQL を、書き込み先のスキーマだけ変えて動かす」ことが分かれば十分です。
@@ -76,7 +138,6 @@
 
 # COMMAND ----------
 
-import os
 import time
 import urllib.parse
 
@@ -144,7 +205,7 @@ displayHTML(f'<a href="{pipeline_url}" target="_blank">▶ パイプラインを
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. 実行する
+# MAGIC ## 3. 実行する
 # MAGIC
 # MAGIC ⚠️ **初回は 4〜6 分かかります**（サーバーレスの計算資源が立ち上がるため）。
 # MAGIC 上のリンクからパイプラインの画面を開くと、bronze → silver → gold が
@@ -203,7 +264,7 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3. できたテーブルを確認する
+# MAGIC ## 4. できたテーブルを確認する
 # MAGIC
 # MAGIC ⭐ 以降のパートで使うのは **gold の 7 テーブル**です。
 
@@ -271,7 +332,7 @@ for name, desc in GOLD_TABLES:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4. （待ち時間用）パイプラインの SQL を読んでみる
+# MAGIC ## 5. （待ち時間用）パイプラインの SQL を読んでみる
 # MAGIC
 # MAGIC ⚠️ 書き方を覚える必要はありません。**3 層に分ける考え方**だけ持ち帰ってください。
 # MAGIC
@@ -298,6 +359,27 @@ for f in SQL_FILES:
     except OSError as e:
         print(f"  （ファイルを開けませんでした: {e}）")
         print(f"  画面左の Workspace から {REPO_ROOT}/src/pipelines/{f} を開いてください。")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## ⭐ 見本と見比べる
+# MAGIC
+# MAGIC ⭐ 見本 (`fc_sample`) と自分のスキーマで、**同じ行数になっているか**を確認します。
+# MAGIC ⚠️ 合っていなければ、どこかでコピーか実行が抜けています。
+
+# COMMAND ----------
+
+print(f"{'テーブル':<26} {'あなた':>10} {'見本':>10}   一致")
+print("-" * 62)
+for name, _ in GOLD_TABLES:
+    mine = spark.table(f"{MY}.{name}").count()
+    try:
+        ref = spark.table(f"{SAMPLE}.{name}").count()
+        mark = "✅" if mine == ref else "⚠️ ずれています"
+    except Exception:  # noqa: BLE001
+        ref, mark = -1, "（見本が見つかりません）"
+    print(f"{name:<26} {mine:>10,} {ref:>10,}   {mark}")
 
 # COMMAND ----------
 

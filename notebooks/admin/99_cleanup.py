@@ -10,14 +10,14 @@
 # MAGIC
 # MAGIC | 対象 | 内容 |
 # MAGIC |---|---|
-# MAGIC | 参加者のスキーマ | `fc_ws_*` とその中のテーブル・モデルすべて |
+# MAGIC | 参加者のスキーマ | `fc_ws_*` とその中のテーブル・**Volume**・モデルすべて |
 # MAGIC | 参加者のパイプライン | `[handson] * のメダリオンパイプライン` |
 # MAGIC
 # MAGIC ## 消えないもの（別途）
 # MAGIC
 # MAGIC | 対象 | 消し方 |
 # MAGIC |---|---|
-# MAGIC | 共有スキーマ / 見本 / Volume / ジョブ | `databricks bundle destroy -t dev` |
+# MAGIC | 見本スキーマ / Volume / パイプライン / ジョブ / ダッシュボード | `databricks bundle destroy -t dev` |
 # MAGIC | カタログ | 手動で `DROP CATALOG`（意図せず消さないため自動化しません） |
 # MAGIC | 参加者が作ったダッシュボード / Genie Agent | 画面から個別に削除 |
 

@@ -15,7 +15,7 @@ resources:
             base_parameters:
               bundle_file_path: ${workspace.file_path}
               catalog: ${var.catalog}
-              schema: ${var.shared_schema}
+              schema: ${var.sample_schema}
               volume: ${var.landing_volume}
               load_set: "A"
       queue:

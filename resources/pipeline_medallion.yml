@@ -17,7 +17,7 @@ resources:
       continuous: false
       development: true
       configuration:
-        landing_path: /Volumes/${var.catalog}/${var.shared_schema}/${var.landing_volume}
+        landing_path: /Volumes/${var.catalog}/${var.sample_schema}/${var.landing_volume}
       libraries:
         - file:
             path: ../src/pipelines/01_bronze.sql

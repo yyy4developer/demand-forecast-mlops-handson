@@ -27,11 +27,8 @@ variables:
   catalog:
     description: "ハンズオンで使うカタログ名"
     default: demand_forecast_handson
-  shared_schema:
-    description: "CSV を置く Volume 専用の共有スキーマ"
-    default: fc_shared
   sample_schema:
-    description: "完成見本の gold を置くスキーマ (参加者は読み取りのみ)"
+    description: "検証済みの見本を全部置くスキーマ (参加者は読み取りのみ)"
     default: fc_sample
   landing_volume:
     description: "CSV を投入する Volume 名"
@@ -63,7 +60,7 @@ targets:
     presets:
       # ⚠️ `mode: development` は使わない。
       #    development モードはリソース名に "dev_<user>_" を自動で付けるため、
-      #    共有スキーマ名が `fc_shared` で固定されている前提
+      #    見本スキーマ名が `fc_sample` で固定されている前提
       #    (参加者向け手順・ノートブック・Genie Agent がこの名前を参照する) が崩れる。
       #    ⚠️ `presets.name_prefix: ""` では無効化できない (空文字は未指定と同じ扱い)。
       #    パイプラインを開発モードにする設定だけを明示的に有効化する。

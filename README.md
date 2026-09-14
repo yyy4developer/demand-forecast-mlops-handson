@@ -78,11 +78,16 @@ git diff --stat data/          # 差分が出なければ再現できている
 
 ## スキーマ構成
 
+スキーマは **2 つだけ**です。
+
 | スキーマ | 中身 | 誰が書くか |
 |---|---|---|
-| `fc_shared` | CSV を置く Volume だけ | 管理者 |
-| `fc_sample` | 完成見本の gold | 管理者 |
-| ⭐ `fc_ws_<user>` | **各参加者の bronze → silver → gold 以降すべて** | ⭐ 参加者自身 |
+| `fc_sample` | ⭐ **検証済みの見本すべて**（CSV の Volume / bronze→gold / メトリクスビュー / モデル / MMF 結果 / ダッシュボード） | 管理者 |
+| ⭐ `fc_ws_<user>` | ⭐ **各参加者が同じものを作る場所**（Volume も含む） | ⭐ 参加者自身 |
+
+⭐⭐ **ハンズオンのゴールは「見本を自分のスキーマに再現すること」です。**
+見本には完成形が全部入っているので、詰まったら中を見比べられます。
+参加者は見本の CSV を**自分の Volume にコピー**してから取り込みます。
 
 ⭐ 本来のデータ基盤なら bronze → silver → gold は**共通スキーマに 1 セット**作ります。
 今回は「取り込みから自分の手で体験する」ことを目的に、参加者ごとに一式を作る構成にしています。
@@ -112,8 +117,8 @@ databricks bundle deploy   -t dev -p <profile>
 
 | 作られるもの | リソース |
 |---|---|
-| 共有スキーマ / 見本用スキーマ | `resources/catalog_schema.yml` |
-| CSV 投入先の Volume | `resources/volumes.yml` |
+| 見本スキーマ | `resources/catalog_schema.yml` |
+| 見本の CSV を置く Volume | `resources/volumes.yml` |
 | サンプルデータ投入ジョブ | `resources/job_setup.yml` |
 | 見本用の bronze → silver → gold パイプライン | `resources/pipeline_medallion.yml` |
 

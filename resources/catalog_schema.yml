@@ -1,28 +1,23 @@
-# スキーマ構成
+# 見本スキーマ
 #
-# ⭐ 本来のデータ基盤なら、bronze → silver → gold は**共通のスキーマに 1 セット**作ります。
-#    今回は「参加者一人ひとりが取り込みから体験する」ことを目的にしているため、
-#    **共通スキーマ (CSV) → 個人スキーマ (bronze→silver→gold)** という流れにしています。
+# ⭐ ハンズオンのゴールは「**このスキーマを自分のスキーマに再現すること**」です。
 #
 #   | スキーマ | 中身 | 誰が書くか |
 #   |---|---|---|
-#   | fc_shared      | CSV を置く Volume だけ            | 管理者 |
-#   | fc_sample      | 完成見本の gold (参考用)          | 管理者 |
-#   | fc_ws_<user>   | 各参加者の bronze→silver→gold 以降 | 参加者自身 |
+#   | fc_sample     | ⭐ **検証済みの見本すべて**（CSV の Volume / bronze→gold / メトリクスビュー / モデル / MMF 結果 / ダッシュボード） | 管理者 |
+#   | fc_ws_<user>  | ⭐ **各参加者が同じものを作る場所**（Volume も含む） | 参加者自身 |
 #
-# ⚠️ カタログはここでは作りません。この metastore は Default Storage 構成のため
-#    API 経由の CREATE CATALOG が失敗します (SQL 経由なら通る)。
-#    → `notebooks/admin/00_prepare_environment.py` で作成します。
+# ⭐ 参加者は見本の Volume から CSV を**自分の Volume にコピー**して取り込みます。
+#    だから「見本を見ながら同じものを作る」形になります。
 #
-# 参加者ごとのスキーマは notebooks/_config.py が実行時に自動作成します。
+# ⚠️ カタログはここでは作りません。Default Storage 構成のメタストアでは
+#    API 経由の CREATE CATALOG が失敗するため、
+#    `notebooks/admin/00_prepare_environment.py` で SQL から作成します。
+#
+# 参加者ごとのスキーマと Volume は notebooks/_config.py が実行時に自動作成します。
 resources:
   schemas:
-    shared:
-      catalog_name: ${var.catalog}
-      name: ${var.shared_schema}
-      comment: "CSV を置く Volume 専用のスキーマ。参加者は Volume の読み取りのみ。"
-
     sample:
       catalog_name: ${var.catalog}
       name: ${var.sample_schema}
-      comment: "完成見本の gold テーブル。参加者は読み取りのみ。自分で作る前に「出来上がり」を見るためのもの。"
+      comment: "検証済みの見本。参加者はここを読み、自分のスキーマに同じものを作る。"
