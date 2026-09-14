@@ -88,7 +88,7 @@ Git フォルダにこのリポジトリを取り込み、画面から bundle �
 | 2 | ⭐ **SQL ウェアハウス**（無ければ Pro + サーバーレスで新規作成） |
 | 2b | ⭐⭐ **`.databricks/bundle/dev/variable-overrides.json`**（ウェアハウス ID をデプロイに渡すため） |
 | 3 | ⚠️ **参加者グループの種類の判定**（アカウントグループかどうか） |
-| 4 | ⭐ **参加者グループへの権限**（カタログ / 見本スキーマ / Volume / ウェアハウス） |
+| 4 | ⭐ **参加者グループへの権限**（⚠️ **カタログとウェアハウスだけ**）|
 | 5 | ⭐ **デプロイ準備状況のサマリ**（何が揃ったか / 渡す値は無いこと） |
 
 > ⚠️ **なぜ bundle でカタログを作らないのか**
@@ -112,6 +112,20 @@ Git フォルダにこのリポジトリを取り込み、画面から bundle �
 > ⭐ **デプロイ時に渡す値はありません**。
 > ⚠️ このファイルは Git 管理外なので、リポジトリには入りません。
 
+> ⚠️⚠️ **見本スキーマと Volume の権限は `00` では付きません。**
+>
+> `fc_sample` とその Volume は **STEP 3 のデプロイが作る**ので、`00` の時点では
+> 存在せず、GRANT すると `SCHEMA_DOES_NOT_EXIST` で失敗します。
+>
+> ⭐ そこで bundle 側に `grants:` を書いてあります。
+>
+> | ファイル | 付く権限 |
+> |---|---|
+> | `resources/catalog_schema.yml` | `USE_SCHEMA` / `SELECT` |
+> | `resources/volumes.yml` | `READ_VOLUME` |
+>
+> ⭐ **デプロイがリソースの作成と権限付与を同時にやる**ので、手作業はありません。
+
 ## STEP 3 — ⭐ 画面から bundle をデプロイする
 
 1. Git フォルダの中の **`databricks.yml` があるフォルダ**を開く
@@ -134,6 +148,17 @@ Git フォルダにこのリポジトリを取り込み、画面から bundle �
 
 ⚠️ **参加者ごとのスキーマと Volume は作りません。** 参加者が `00` を実行したときに
 自分で作ります（`notebooks/_config.py` が担当）。
+
+### ⭐ デプロイ直後に権限を確認する
+
+```sql
+SHOW GRANTS ON SCHEMA <catalog>.fc_sample;          -- USE SCHEMA / SELECT
+SHOW GRANTS ON VOLUME <catalog>.fc_sample.landing;  -- READ VOLUME
+```
+
+⚠️ 付いていない場合は、参加者グループ名（`participant_group`）が
+**アカウントグループとして実在するか**を確認してください。
+⚠️ ワークスペースローカルのグループは UC の GRANT に使えません。
 
 ## STEP 4 — サンプルデータを投入（⚠️ セット A だけ）
 

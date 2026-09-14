@@ -21,3 +21,9 @@ resources:
       catalog_name: ${var.catalog}
       name: ${var.sample_schema}
       comment: "検証済みの見本。参加者はここを読み、自分のスキーマに同じものを作る。"
+      grants:
+        - principal: ${var.participant_group}
+          privileges:
+            - USE_SCHEMA
+            - SELECT
+

@@ -271,10 +271,20 @@ else:
 # MAGIC | `USE SCHEMA` / `SELECT`（見本） | 見本を読み、自分のスキーマに再現するため |
 # MAGIC | ⭐ `READ VOLUME`（見本） | **見本の CSV を自分の Volume にコピーするため** |
 # MAGIC
+# MAGIC ### ⚠️ どこで付くかが分かれています
+# MAGIC
+# MAGIC | 権限 | 付ける場所 | 理由 |
+# MAGIC |---|---|---|
+# MAGIC | `USE CATALOG` / `CREATE SCHEMA` | ⭐ **このノートブック**（下のセル） | カタログはこのノートブックが作るため |
+# MAGIC | SQL ウェアハウスの `CAN USE` | ⭐ **このノートブック**（下のセル） | ウェアハウスは既にあるため |
+# MAGIC | ⭐ `USE SCHEMA` / `SELECT`（見本スキーマ） | ⭐ **deploy**（`resources/catalog_schema.yml`） | ⚠️ **スキーマは deploy が作る**ため、今 GRANT すると `SCHEMA_DOES_NOT_EXIST` になります |
+# MAGIC | ⭐ `READ VOLUME`（見本の Volume） | ⭐ **deploy**（`resources/volumes.yml`） | ⚠️ 同じ理由。Volume も deploy が作ります |
+# MAGIC
+# MAGIC ⭐ **bundle 側に `grants:` を書いてあるので、deploy がリソース作成と権限付与を同時にやります。**
+# MAGIC 手で追加する作業はありません。
+# MAGIC
 # MAGIC ⭐ 参加者は**自分のスキーマと Volume を自分で作る**ので、
 # MAGIC そこへの書き込み権限は自動的に持ちます（作成者が所有者になります）。
-# MAGIC
-# MAGIC ⭐ **SQL ウェアハウスの `CAN USE` も、このノートブックが付けます**（下のセル）。
 # MAGIC
 # MAGIC ⚠️ **これ以外に UI 側で必要なもの**（このノートブックでは付けられません）:
 # MAGIC
@@ -284,15 +294,20 @@ else:
 
 # COMMAND ----------
 
+# ⚠️ ここではカタログレベルの権限だけを付けます。
+#
+#    見本スキーマ (fc_sample) と その Volume は **DAB deploy が作る**ので、
+#    このノートブックの時点では存在せず、GRANT すると
+#    SCHEMA_DOES_NOT_EXIST で失敗します。
+#
+# ⭐ だからスキーマ / Volume の権限は bundle 側に書いてあります:
+#      resources/catalog_schema.yml  → USE_SCHEMA, SELECT
+#      resources/volumes.yml         → READ_VOLUME
+#    deploy がリソースの作成と権限付与をまとめてやってくれます。
 GRANTS = [
     f"GRANT USE CATALOG ON CATALOG {catalog} TO `{group}`",
     # ⭐ 参加者が自分のスキーマ fc_ws_<user> と Volume を作れるようにする
     f"GRANT CREATE SCHEMA ON CATALOG {catalog} TO `{group}`",
-    # 見本スキーマ（読み取りのみ）
-    f"GRANT USE SCHEMA ON SCHEMA {catalog}.{sample_schema} TO `{group}`",
-    f"GRANT SELECT ON SCHEMA {catalog}.{sample_schema} TO `{group}`",
-    # ⭐ 見本の CSV を自分の Volume にコピーするため（読み取りだけで足ります）
-    f"GRANT READ VOLUME ON VOLUME {catalog}.{sample_schema}.{volume} TO `{group}`",
 ]
 
 if not group_ok:
@@ -335,19 +350,23 @@ if failed:
 
 # COMMAND ----------
 
-for target, kind in [
-    (f"CATALOG {catalog}", "カタログ"),
-    (f"SCHEMA {catalog}.{sample_schema}", "見本スキーマ"),
-    (f"VOLUME {catalog}.{sample_schema}.{volume}", "見本の Volume"),
-]:
-    print(f"\n[{kind}] {target}")
-    try:
-        rows = spark.sql(f"SHOW GRANTS ON {target}").collect()
-        for r in rows:
-            if group in str(r["Principal"]):
-                print(f"  {r['ActionType']}")
-    except Exception as e:  # noqa: BLE001
-        print(f"  ⚠️ 確認できませんでした: {type(e).__name__}")
+# ⭐ この時点で確認できるのはカタログレベルだけです。
+print(f"[カタログ] CATALOG {catalog}")
+try:
+    rows = spark.sql(f"SHOW GRANTS ON CATALOG {catalog}").collect()
+    got = [r["ActionType"] for r in rows if group in str(r["Principal"])]
+    for a in sorted(got):
+        print(f"  ✅ {a}")
+    if not got:
+        print("  ⚠️ 権限が見つかりません。上の 3. でグループを用意できているか確認してください。")
+except Exception as e:  # noqa: BLE001
+    print(f"  ⚠️ 確認できませんでした: {type(e).__name__}")
+
+print()
+print("⏭ 見本スキーマと Volume の権限は **deploy 後**に確認します。")
+print(f"   deploy が終わったら、この 2 つが {group} に付いているはずです:")
+print(f"     SHOW GRANTS ON SCHEMA {catalog}.{sample_schema}   → USE SCHEMA / SELECT")
+print(f"     SHOW GRANTS ON VOLUME {catalog}.{sample_schema}.{volume} → READ VOLUME")
 
 # COMMAND ----------
 

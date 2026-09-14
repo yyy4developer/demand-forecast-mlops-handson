@@ -18,3 +18,8 @@ resources:
       name: ${var.landing_volume}
       volume_type: MANAGED
       comment: "見本のサンプル CSV。参加者はここから自分の Volume にコピーする。"
+      grants:
+        - principal: ${var.participant_group}
+          privileges:
+            - READ_VOLUME
+
