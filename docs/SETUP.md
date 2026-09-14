@@ -374,6 +374,43 @@ databricks api post "/api/2.0/pipelines/<pipeline_id>/updates" --json '{"full_re
 
 ---
 
+## ⚠️⚠️ 後片付けでいちばん踏みやすい罠
+
+⚠️ **`bundle destroy` と `deploy` を別のクライアントで混ぜないでください。**
+
+⭐ DAB は**差分だけ**アップロードします。どのファイルを上げたかは
+**デプロイした側**が覚えています。
+
+| 事故の起き方 | 結果 |
+|---|---|
+| ⚠️ ローカル CLI で `destroy` → 画面から `deploy` | ⚠️⚠️ **変更したファイルしか上がらない** |
+| | → ジョブが `Unable to access the notebook ...` で失敗 |
+
+⭐ **必ずどちらか一方に統一してください。**
+
+### ⚠️ 混ざってしまったときの直し方
+
+⭐ **ワークスペース側のデプロイ跡を丸ごと消す**と、次のデプロイで全ファイルが上がります。
+
+```bash
+# ① DAB リソースを消す
+databricks bundle destroy -t dev -p <profile>
+
+# ② ⭐ デプロイ跡（ランナー・同期状態）を消す ← これが要点
+databricks workspace delete /Users/<you>/.bundle/<bundle_name> --recursive -p <profile>
+
+# ③ Git フォルダ側の .databricks も消す（あれば）
+databricks workspace delete /Users/<you>/<git-folder>/.databricks --recursive -p <profile>
+```
+
+⚠️ ③ を消すと `variable-overrides.json` も消えるので、⭐ **`00_prepare_environment` を再実行**してください。
+
+> 💡 **見分け方**: デプロイのログに `Files: 2 uploaded` のように
+> **極端に少ない数**が出たら、この状態を疑ってください。
+> 初回デプロイなら 50 件前後が上がります。
+
+---
+
 ## 後片付け
 
 ```bash
