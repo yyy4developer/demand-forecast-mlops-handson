@@ -22,26 +22,6 @@
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## 0. 使うライブラリを入れる
-# MAGIC
-# MAGIC ⚠️ サーバーレスの既定環境（環境バージョン 1）には機械学習のライブラリが入っておらず、
-# MAGIC Python も古いため、そのまま `mlflow` を入れると依存関係が衝突します。
-# MAGIC
-# MAGIC ⭐ このノートブックは先頭で **環境バージョン 5** を宣言しています。
-# MAGIC
-# MAGIC ```
-# MAGIC # /// script
-# MAGIC # [tool.databricks.environment]
-# MAGIC # environment_version = "5"
-# MAGIC # ///
-# MAGIC ```
-# MAGIC
-# MAGIC > 💡 画面右側の **「環境」** パネルでもバージョンを確認・変更できます。
-# MAGIC > ⚠️ ここが古いままだと、次のセルの後で `ImportError` が出ます。
-
-# COMMAND ----------
-
 # MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0" matplotlib
 
 # COMMAND ----------

@@ -39,26 +39,6 @@
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## 0. 使うライブラリを入れる
-# MAGIC
-# MAGIC ⚠️ サーバーレスの既定環境（環境バージョン 1）には機械学習のライブラリが入っておらず、
-# MAGIC Python も古いため、そのまま `mlflow` を入れると依存関係が衝突します。
-# MAGIC
-# MAGIC ⭐ このノートブックは先頭で **環境バージョン 5** を宣言しています。
-# MAGIC
-# MAGIC ```
-# MAGIC # /// script
-# MAGIC # [tool.databricks.environment]
-# MAGIC # environment_version = "5"
-# MAGIC # ///
-# MAGIC ```
-# MAGIC
-# MAGIC > 💡 画面右側の **「環境」** パネルでもバージョンを確認・変更できます。
-# MAGIC > ⚠️ ここが古いままだと、次のセルの後で `ImportError` が出ます。
-
-# COMMAND ----------
-
 # MAGIC %pip install -q "mlflow>=2.22.0" "scikit-learn>=1.5.0" matplotlib
 
 # COMMAND ----------
@@ -129,6 +109,17 @@ def tag_text(mv, key: str, default: str = "?") -> str:
         return default
 
 
+def all_versions(name: str) -> list:
+    """登録されている全バージョンを、エイリアスとタグ込みで取得する。
+
+    ⚠️ `search_model_versions` が返すオブジェクトには
+    エイリアスとタグが入っていないため（一覧が全部 "-" や "?" になります）、
+    バージョン番号だけ拾って 1 件ずつ取り直しています。
+    """
+    versions = [int(mv.version) for mv in client.search_model_versions(f"name='{name}'")]
+    return [client.get_model_version(name, str(v)) for v in sorted(versions)]
+
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -141,7 +132,7 @@ print(f"@champion       : バージョン {champ.version}")
 print(f"  記録された MAE : {tag_text(champ, 'mae', '(なし)')}")
 print(f"  記録された MASE: {tag_text(champ, 'mase', '(なし)')}")
 print(f"\n登録されている全バージョン:")
-for mv in client.search_model_versions(f"name='{MODEL_NAME}'"):
+for mv in all_versions(MODEL_NAME):
     print(f"  v{mv.version:<3} エイリアス: {alias_text(mv):<24} MAE: {tag_text(mv, 'mae')}")
 
 # COMMAND ----------
@@ -419,7 +410,7 @@ else:
 
 # COMMAND ----------
 
-for mv in sorted(client.search_model_versions(f"name='{MODEL_NAME}'"), key=lambda x: int(x.version)):
+for mv in all_versions(MODEL_NAME):
     print(f"  v{mv.version:<3} エイリアス: {alias_text(mv):<26} MAE: {tag_text(mv, 'mae')}")
 
 from databricks.sdk import WorkspaceClient  # noqa: E402

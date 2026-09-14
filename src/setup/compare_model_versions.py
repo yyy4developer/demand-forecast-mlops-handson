@@ -109,8 +109,12 @@ for a in ("champion", "challenger"):
     except Exception:  # noqa: BLE001
         pass
 
+# ⚠️ `search_model_versions` の返り値にはタグが入っていないため、
+#    バージョン番号だけ拾って 1 件ずつ取り直します。
+_nums = sorted(int(mv.version) for mv in client.search_model_versions(f"name='{MODEL_NAME}'"))
+
 rows = []
-for mv in sorted(client.search_model_versions(f"name='{MODEL_NAME}'"), key=lambda x: int(x.version)):
+for mv in (client.get_model_version(MODEL_NAME, str(v)) for v in _nums):
     m = mlflow.pyfunc.load_model(f"models:/{MODEL_NAME}/{mv.version}")
     p_valid = np.clip(m.predict(valid[FEATURE_COLS]), 0, None)
     p_recent = np.clip(m.predict(recent[FEATURE_COLS]), 0, None)
