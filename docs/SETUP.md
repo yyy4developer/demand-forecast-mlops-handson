@@ -205,7 +205,32 @@ databricks bundle run monthly_forecast_cycle_sample -t dev -p <profile> --var wa
 ⚠️ **順番が大事です。** ② は「今の本番と比べる」処理なので、① を先に実行して
 比べる相手を作っておかないと失敗します。
 
-⭐ 実測 **5 分半**で 4 タスクが通ります。
+⭐ 実測 **5.8 分**で 4 タスクが通ります（内訳: CSV 投入 0.6 / パイプライン 2.1 / 再学習 1.7 / 評価 1.3 分）。
+
+⭐ **通ったときに確認できること**（実測値）
+
+| | 結果 |
+|---|---|
+| `fc_sample.fct_shipments` | 3,081 → ⭐ **3,120 行**（2026-08 が入る） |
+| `fc_sample.fct_forecast_accuracy_all` | ⭐ **5,343 行 / 3 手法**、`target_ym` が 2026-08-31 まで |
+| `fc_sample.demand_forecast` | ⭐ **v2 が登録され `@champion` に昇格** |
+
+⚠️⚠️ **試し実行したら、必ず `fc_sample` をセット A の状態に戻してください。**
+
+```bash
+# ① 見本 Volume からセット B を削除
+databricks fs rm dbfs:/Volumes/<catalog>/fc_sample/landing/shipments/shipments_2026_08.csv -p <profile>
+
+# ② 見本パイプラインをフルリフレッシュ（gold が 3,081 行に戻る）
+databricks api post "/api/2.0/pipelines/<pipeline_id>/updates" --json '{"full_refresh": true}' -p <profile>
+```
+
+⚠️ **戻し忘れると `00` の「見本と見比べる」が全テーブルで「ずれています」になり、
+さらに参加者の `00` が CSV を両方コピーして `07` の見せ場が消えます。**
+
+> 💡 見本のモデル (`v2 @champion`) と `fct_forecast_accuracy_all` は 1 か月分先の
+> ままになりますが、⭐ **参加者はどちらも参照しません**
+> （`00` が比べるのは gold 7 テーブルの行数、`08` が読むのは `scm_*` だけ）。
 
 ## STEP 9 — 当日直前のウォームアップ
 

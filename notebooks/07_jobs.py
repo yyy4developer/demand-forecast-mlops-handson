@@ -185,8 +185,6 @@ print("カタログ画面での場所:")
 print(f"  {catalog} → {schema} → ボリューム → {LANDING_VOLUME} → shipments")
 print()
 
-import os
-
 _before = sorted(os.listdir(f"{LANDING_PATH}/shipments")) if os.path.isdir(f"{LANDING_PATH}/shipments") else []
 print("今ある出荷実績ファイル:")
 for f in _before:
@@ -291,7 +289,7 @@ display(spark.sql(f"""
     FROM {MY}.fct_shipments
     UNION ALL
     SELECT '③ 評価テーブル',
-           CAST(MAX(ym) AS STRING),
+           CAST(MAX(target_ym) AS STRING),
            '2026-08-31 まで精度が記録されている'
     FROM {MY}.fct_forecast_accuracy_all
 """))
@@ -306,14 +304,24 @@ display(spark.sql(f"""
 
 # COMMAND ----------
 
-print("⭐ 下のリンクから Unity Catalog を開いて、次の 2 つを見てください。")
+# ⚠️ Unity Catalog の models API はエイリアスを返さないため、
+#    エイリアスは MLflow 側のエンドポイントから別に取ります。
+_full = f"{MY}.demand_forecast"
+_vers = (api.do("GET", f"/api/2.1/unity-catalog/models/{_full}/versions") or {}).get("model_versions") or []
+_model = api.do("GET", f"/api/2.0/mlflow/unity-catalog/registered-models/get?name={_full}") or {}
+_aliases = {}
+for a in ((_model.get("registered_model") or _model).get("aliases") or []):
+    _aliases.setdefault(str(a["version"]), []).append(a["alias"])
+
+for v in sorted(_vers, key=lambda x: int(x["version"])):
+    n = str(v["version"])
+    label = ", ".join(_aliases.get(n, [])) or "-"
+    print(f"  v{n:<3} エイリアス: {label}")
+
 print()
-print("  1. バージョンが 1 つ増えている        → 再学習が走った証拠")
-print("  2. @champion がどのバージョンにあるか")
-print("       最新バージョン → ⭐ 昇格した")
-print("       前のバージョン → ⚠️ 見送り（どちらも正しい結果です）")
-print()
-print("⭐ ジョブのタスク retrain のログにも、判定の内容がそのまま出ています。")
+print("⭐ @champion が最新バージョンにあれば「昇格した」、")
+print("   前のバージョンのままなら「見送り」です。⚠️ どちらも正しい結果です。")
+print("⭐ 判定の中身は、ジョブの retrain タスクのログにそのまま出ています。")
 
 displayHTML(
     f'<a href="{w.config.host}/explore/data/models/{catalog}/{schema}/demand_forecast" '
