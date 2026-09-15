@@ -137,6 +137,13 @@ print(f"✅ {MY}.fct_forecast_model に {sdf.count():,} 行を書き出しまし
 # MAGIC   fct_forecast_ai        （ai_forecast）  ┘        ↑ 実績と突き合わせ済み
 # MAGIC ```
 # MAGIC
+# MAGIC ⚠️ **実績と重なる月が無い予測は採点できません。**
+# MAGIC ⭐ `03` は未来 18 か月とは別に、**直近 12 か月を隠して予測した分**も書き出しているので、
+# MAGIC `ai_forecast` もここで採点されます。
+# MAGIC
+# MAGIC ```
+# MAGIC ```
+# MAGIC
 # MAGIC ⭐ **これがあると「毎月、精度が自動で記録される」状態になります。**
 # MAGIC ⚠️ ここを作らないと、精度は誰かが手でクエリを書いたときにしか分かりません。
 # MAGIC 「気づいたら 3 か月ずれ続けていた」が起きるのはこの穴です。
@@ -179,8 +186,23 @@ spark.sql(f"""
 spark.sql(f"COMMENT ON TABLE {MY}.fct_forecast_accuracy_all IS "
           f"'すべての予測手法を実績と突き合わせた結果。手法ごとの精度を同じ条件で比べられる。'")
 
+_n = spark.table(f"{MY}.fct_forecast_accuracy_all").count()
+_shown = spark.sql(
+    f"SELECT COUNT(DISTINCT model_name) AS n FROM {MY}.fct_forecast_accuracy_all"
+).collect()[0]["n"]
 print(f"✅ {MY}.fct_forecast_accuracy_all を更新しました "
-      f"({spark.table(f'{MY}.fct_forecast_accuracy_all').count():,} 行 / 対象 {len(sources)} 手法)")
+      f"({_n:,} 行 / 元テーブル {len(sources)} 本 → 採点できた手法 {_shown})")
+
+# ⚠️ 元テーブルの数と採点できた手法の数がずれることがあります。
+#    ⭐ 実績と重なる月が無い予測（未来だけの予測）は採点できないためです。
+if _shown < len(sources):
+    print()
+    print("⚠️ 採点できなかった手法があります。実績と重なる月が無い予測です。")
+    display(spark.sql(" UNION ALL ".join(
+        f"SELECT '{s}' AS `予測テーブル`, MIN(target_ym) AS `開始`, MAX(target_ym) AS `終了`, "
+        f"COUNT(*) AS `行数` FROM {MY}.{s}" for s in sources)))
+    print("   ⭐ 実績は次の期間です。ここと重ならない予測は採点対象外になります:")
+    display(spark.sql(f"SELECT MIN(ym) AS `実績の開始`, MAX(ym) AS `実績の終了` FROM {MY}.fct_shipments"))
 display(spark.sql(f"""
     SELECT model_name AS `予測手法`,
            ROUND(AVG(abs_error), 2)            AS `平均誤差_個数`,

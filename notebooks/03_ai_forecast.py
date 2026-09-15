@@ -75,6 +75,20 @@ LAST_YM, HORIZON_YM = str(row["last_ym"]), str(row["horizon_ym"])
 print(f"実績の最終月 : {LAST_YM}")
 print(f"予測の終端   : {HORIZON_YM}  ← horizon にこれを渡します（18 か月先）")
 
+# ⭐⭐ 採点用の窓も出します。
+#
+# ⚠️ 未来の予測は「当たったか」を確かめられません（実績がまだ無いので）。
+# ⭐ そこで **直近 12 か月を隠して、その 12 か月を予測させる**ことで、
+#    後の `05` で「去年と同じ」「自作モデル」と同じ土俵で比べられるようにします。
+BACKTEST_MONTHS = 12
+row2 = spark.sql(f"""
+    SELECT LAST_DAY(ADD_MONTHS(MAX(ym), -{BACKTEST_MONTHS})) AS cutoff_ym
+    FROM {MY}.fct_shipments
+""").collect()[0]
+CUTOFF_YM = str(row2["cutoff_ym"])
+print()
+print(f"⭐ 採点用に隠す期間 : {CUTOFF_YM} の翌月 〜 {LAST_YM}（{BACKTEST_MONTHS} か月）")
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -85,11 +99,18 @@ print(f"予測の終端   : {HORIZON_YM}  ← horizon にこれを渡します�
 
 # COMMAND ----------
 
+# ⚠️⚠️ 区切り文字の分割は **`'[|]'`（文字クラス）** で書きます。
+#
+#    `'\\|'` のようにバックスラッシュで書くと、
+#    Python の文字列 → JSON（REST API）→ SQL の 3 段でエスケープが変わり、
+#    ⚠️ **段数を 1 つ間違えると「1 文字ずつ分割」される**という分かりにくい壊れ方をします
+#    （実際に踏みました: item_code が 'K210' ではなく 'K' になる）。
+#    ⭐ 文字クラスならバックスラッシュが不要なので、どの経路でも同じ意味になります。
 AI_FORECAST_SQL = f"""
 CREATE OR REPLACE TABLE {MY}.fct_forecast_ai AS
 SELECT
-  SPLIT(series_id, '\\\\|')[0] AS item_code,
-  SPLIT(series_id, '\\\\|')[1] AS channel,
+  SPLIT(series_id, '[|]')[0] AS item_code,
+  SPLIT(series_id, '[|]')[1] AS channel,
   ym                          AS target_ym,
   'ai_forecast'               AS model_name,
   qty_forecast                AS p50,
@@ -104,6 +125,35 @@ FROM AI_FORECAST(
     FROM {MY}.fct_shipments
   ),
   horizon   => '{HORIZON_YM}',
+  time_col  => 'ym',
+  value_col => 'qty',
+  group_col => 'series_id',
+  frequency => 'ME'
+)
+"""
+
+# ⭐⭐ 採点用。学習に使うのは CUTOFF_YM までで、そこから LAST_YM までを予測させます。
+#    ⭐ 同じテーブルに追記するので、`05` の突き合わせでそのまま拾われます。
+AI_BACKTEST_SQL = f"""
+INSERT INTO {MY}.fct_forecast_ai
+SELECT
+  SPLIT(series_id, '[|]')[0] AS item_code,
+  SPLIT(series_id, '[|]')[1] AS channel,
+  ym                          AS target_ym,
+  'ai_forecast'               AS model_name,
+  qty_forecast                AS p50,
+  qty_lower                   AS lower_bound,
+  qty_upper                   AS upper_bound
+FROM AI_FORECAST(
+  TABLE(
+    SELECT
+      CONCAT(item_code, '|', channel) AS series_id,
+      ym,
+      CAST(qty AS DOUBLE)             AS qty
+    FROM {MY}.fct_shipments
+    WHERE ym <= '{CUTOFF_YM}'
+  ),
+  horizon   => '{LAST_YM}',
   time_col  => 'ym',
   value_col => 'qty',
   group_col => 'series_id',
@@ -149,9 +199,24 @@ def run_on_warehouse(statement: str, wait: str = "50s") -> dict:
     return res
 
 
+# ① 未来 18 か月（グラフで見る用）
 run_on_warehouse(AI_FORECAST_SQL, wait="50s")
-n = spark.table(f"{MY}.fct_forecast_ai").count()
-print(f"✅ {MY}.fct_forecast_ai に {n:,} 行の予測を書き出しました")
+n_future = spark.table(f"{MY}.fct_forecast_ai").count()
+print(f"✅ 未来 18 か月の予測を {n_future:,} 行 書き出しました")
+
+# ② ⭐ 採点用に、直近 12 か月を隠して予測（`05` で比較するため）
+run_on_warehouse(AI_BACKTEST_SQL, wait="50s")
+n_all = spark.table(f"{MY}.fct_forecast_ai").count()
+print(f"✅ 採点用の予測を {n_all - n_future:,} 行 追記しました（合計 {n_all:,} 行）")
+
+display(spark.sql(f"""
+    SELECT
+      CASE WHEN target_ym > '{LAST_YM}' THEN '未来（採点できない）'
+           ELSE '実績あり（05 で採点する）' END AS `区分`,
+      MIN(target_ym) AS `開始`, MAX(target_ym) AS `終了`, COUNT(*) AS `行数`
+    FROM {MY}.fct_forecast_ai
+    GROUP BY 1 ORDER BY 1
+"""))
 
 # COMMAND ----------
 
