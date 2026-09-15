@@ -42,15 +42,35 @@
 # MAGIC %md
 # MAGIC ## 1. ⭐ MMF のスキルを入れる
 # MAGIC
-# MAGIC ⭐ Genie Code に**これだけ**渡せば入ります。
+# MAGIC ### ⭐ ① まずこれを貼る
 # MAGIC
 # MAGIC ```
 # MAGIC https://github.com/databricks-industry-solutions/many-model-forecasting
-# MAGIC
-# MAGIC MMF の skill を install したい
+# MAGIC の skills/ を私のワークスペースにインストールしてください。
+# MAGIC Genie Code 用の手順（README の Option A）でお願いします。
 # MAGIC ```
 # MAGIC
-# MAGIC ⭐ 入ったか確認したいときは `What skills do you have access to?` と聞いてください。
+# MAGIC ⚠️ **「Option A」まで指定してください。** ⭐ 置き場所が Genie Code 用に決まっているためです。
+# MAGIC
+# MAGIC ### ⚠️⚠️ ② 続けて必ずこれも聞く
+# MAGIC
+# MAGIC ```
+# MAGIC .assistant_instructions.md も作成されていますか？
+# MAGIC ```
+# MAGIC
+# MAGIC ⚠️⚠️ **実測では、スキル本体は入るのに `.assistant_instructions.md` は作られませんでした。**
+# MAGIC 聞いたら「まだ存在していません」と答えて、その場で作ってくれました。
+# MAGIC
+# MAGIC ⭐ このファイルが無いと、⚠️ **AI が確認をすっ飛ばして勝手に最後まで進めてしまいます。**
+# MAGIC ⭐⭐ **「聞いてくること」がこのパートの体験そのもの**なので、必ず確認してください。
+# MAGIC
+# MAGIC ### ⭐ ③ 入ったかの最終確認
+# MAGIC
+# MAGIC ```
+# MAGIC What skills do you have access to?
+# MAGIC ```
+# MAGIC
+# MAGIC ⭐ Many-Model Forecasting と 5 つのサブスキルが挙がれば成功です。
 # MAGIC
 # MAGIC > ⭐ **今日は講師が事前に入れてあります。** この節は「自社でどう始めるか」の参考です。
 # MAGIC > ⚠️ うまく入らないときは、下のセルで置き場所を確認してください。
@@ -64,9 +84,10 @@ api = w.api_client
 me = spark.sql("SELECT current_user()").collect()[0][0]
 
 # ⚠️ Genie Code はパスに厳格。先頭のドットまで含めて一致していないと読み込まれません。
+# ⚠️⚠️ 共通指示が無いと STOP ゲートを無視して勝手に進むため、ここが ✅ であることが重要です。
 for path, label in [
     (f"/Users/{me}/.assistant/skills", "スキル本体"),
-    (f"/Users/{me}/.assistant_instructions.md", "共通指示 (推奨)"),
+    (f"/Users/{me}/.assistant_instructions.md", "共通指示 (⚠️ 必須)"),
 ]:
     try:
         api.do("GET", f"/api/2.0/workspace/get-status?path={path}")

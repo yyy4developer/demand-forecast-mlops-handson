@@ -13,12 +13,31 @@
 
 ```
 https://github.com/databricks-industry-solutions/many-model-forecasting
-
-MMF の skill を install したい
+の skills/ を私のワークスペースにインストールしてください。
+Genie Code 用の手順（README の Option A）でお願いします。
 ```
 
-⭐ 入ったかの確認は `What skills do you have access to?`。
-⚠️ 置き場所は `.assistant/skills/` と `.assistant_instructions.md`（先頭のドットに注意）。
+⚠️ **「Option A」まで指定してください。** ⭐ 置き場所が Genie Code 用に決まっているためです。
+
+### ⚠️⚠️ 続けて必ずこれも聞く
+
+```
+.assistant_instructions.md も作成されていますか？
+```
+
+⚠️⚠️ **実測では、スキル本体は入るのに `.assistant_instructions.md` は作られませんでした。**
+聞いたら「まだ存在していません」と答えて、その場で作ってくれました。
+
+⭐ このファイルが無いと ⚠️ **AI が確認をすっ飛ばして勝手に最後まで進めてしまいます。**
+⭐⭐ 「聞いてくること」がこのパートの体験そのものなので、必ず確認してください。
+
+### ⭐ 最終確認
+
+```
+What skills do you have access to?
+```
+
+⭐ Many-Model Forecasting と 5 つのサブスキルが挙がれば成功です。
 
 ## ② 開始
 

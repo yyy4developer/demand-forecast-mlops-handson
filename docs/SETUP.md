@@ -262,13 +262,18 @@ databricks workspace import skills/assistant_instructions.md \
 ⭐ `skills/install.py` も同梱されています。
 
 > ⭐⭐ **参加者自身に Genie Code で入れてもらう手もあります**（`08` に記載済み）。
-> ⭐ 渡すのはこれだけです。
 >
 > ```
 > https://github.com/databricks-industry-solutions/many-model-forecasting
->
-> MMF の skill を install したい
+> の skills/ を私のワークスペースにインストールしてください。
+> Genie Code 用の手順（README の Option A）でお願いします。
 > ```
+>
+> ⚠️ **「Option A」の指定は省略しないでください。**
+>
+> ⚠️⚠️ **続けて `.assistant_instructions.md` も作られたか必ず確認させてください。**
+> ⭐ 実測では**スキル本体だけ入り、この共通指示は作られませんでした。**
+> ⚠️ 無いと STOP ゲートを無視して勝手に進み、`08` の体験（AI が聞いてくる）が失われます。
 >
 > ⚠️ 当日の時間を考えると**講師が事前に配置しておく**のが安全です。
 
@@ -286,7 +291,7 @@ Many-Model Forecasting と 5 つのサブスキルが挙がれば成功です。
 | ⭐ 所要時間 | ⭐ ジョブ本体 **約 6.5 分**（6 モデル × 29 系列 × 3 ウィンドウ） |
 | GPU | ⭐ **不要**（統計モデルと LightGBM は CPU のみ） |
 | ⚠️ 生成コードの不具合 | ⚠️ `sc.defaultParallelism` はサーバーレスで使えず失敗。⭐ **会話で直させれば通ります**（`08` に対処法を記載） |
-| ⚠️ `.assistant_instructions.md` | ⭐ 当方の検証では**無くても**スキルとゲートは機能しました（公式には必須） |
+| ⚠️⚠️ `.assistant_instructions.md` | ⚠️ **インストールを頼んでも作られません。** ⭐ 別途「作成されていますか？」と聞くと、その場で作ってくれます。⚠️ 無いと STOP ゲートを無視して自律的に進むため、**配置を必ず確認**してください |
 
 ⭐ MMF を最後まで通した結果を **`fc_sample` に `scm_*` として残しておく**と、
 当日は結果を見せるだけで済みます（⭐ `08` は**自分のスキーマ → 見本**の順に探します）。
