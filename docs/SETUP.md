@@ -261,12 +261,13 @@ databricks workspace import skills/assistant_instructions.md \
 
 ⭐ `skills/install.py` も同梱されています。
 
-> ⭐⭐ **参加者自身に Genie Code で入れてもらう手もあります**（`08` にプロンプトを記載済み）。
+> ⭐⭐ **参加者自身に Genie Code で入れてもらう手もあります**（`08` に記載済み）。
+> ⭐ 渡すのはこれだけです。
 >
 > ```
 > https://github.com/databricks-industry-solutions/many-model-forecasting
-> の skills/ を私のワークスペースにインストールしてください。
-> Genie Code 用の手順（README の Option A）でお願いします。
+>
+> MMF の skill を install したい
 > ```
 >
 > ⚠️ 当日の時間を考えると**講師が事前に配置しておく**のが安全です。

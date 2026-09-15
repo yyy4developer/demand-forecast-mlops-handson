@@ -46,13 +46,15 @@
 # MAGIC ⭐ MMF は **Genie Code の「スキル」**として配布されています。
 # MAGIC ⭐⭐ **インストールも Genie Code に頼めます。** GitHub の URL を渡すだけです。
 # MAGIC
-# MAGIC ### ⭐ Genie Code に貼るプロンプト
+# MAGIC ### ⭐ Genie Code に貼るプロンプト（これだけ）
 # MAGIC
 # MAGIC ```
 # MAGIC https://github.com/databricks-industry-solutions/many-model-forecasting
-# MAGIC の skills/ を私のワークスペースにインストールしてください。
-# MAGIC Genie Code 用の手順（README の Option A）でお願いします。
+# MAGIC
+# MAGIC MMF の skill を install したい
 # MAGIC ```
+# MAGIC
+# MAGIC ⭐ **URL を渡せば、置き場所も含めて調べて入れてくれます。**
 # MAGIC
 # MAGIC ### ⚠️ 入れるものは 2 つあります
 # MAGIC
