@@ -233,27 +233,64 @@ databricks api get "/api/2.0/genie/spaces?page_size=20" -p <profile>
 ⭐ 参加者が見本スキーマを読める権限は **STEP 3 のデプロイ**が付けています
 （`USE SCHEMA` / `SELECT`）。
 
-## STEP 6 — MMF の参考結果を作る（`08` を触らせる場合）
+## STEP 6 — MMF のスキルを配置する（`08` を触らせる場合）
 
-⚠️ **参加者全員のフォルダに配置**が必要です。配置しないとスキルが読み込まれず、
+⚠️⚠️ **参加者全員のフォルダに配置が必要です。** 配置しないとスキルが読み込まれず、
 AI が手順を無視して勝手に進みます。
 
-```bash
-# MMF のリポジトリに公式のインストーラがあります
-python skills/install.py
+### ⭐ 置き場所は 2 つ
 
-# または手動で
+| # | パス | 中身 |
+|---|---|---|
+| 1 | `/Users/<参加者>/.assistant/skills/` | スキル本体（md 6 本 + ノートブック雛形 7 本） |
+| 2 | `/Users/<参加者>/.assistant_instructions.md` | ⭐ エージェントへの共通指示（⚠️ 先頭のドット） |
+
+```bash
+# MMF のリポジトリをクローンして
+git clone https://github.com/databricks-industry-solutions/many-model-forecasting.git
+cd many-model-forecasting
+
+# 参加者ごとに実行（USER_FOLDER は参加者のメールアドレス）
+USER_FOLDER="participant@example.com"
 databricks workspace import-dir skills/databricks-skills/many-model-forecasting \
-  /Users/${USER}/.assistant/skills --overwrite
+  /Users/${USER_FOLDER}/.assistant/skills --overwrite
 databricks workspace import skills/assistant_instructions.md \
-  /Users/${USER}/.assistant_instructions.md --format AUTO --language MARKDOWN --overwrite
+  /Users/${USER_FOLDER}/.assistant_instructions.md \
+  --format AUTO --language MARKDOWN --overwrite
 ```
 
-⭐ MMF を最後まで通した結果を **`fc_sample` に `scm_*` として残しておく**と、
-当日は結果を見せるだけで済みます（`08` がそこを読みます）。
+⭐ `skills/install.py` も同梱されています。
 
-⚠️ MMF は Databricks の正式サポート対象外（AS-IS）で、**DBR 18 for ML 以上**が必要です。
-⭐ CPU だけで動くモデルに絞れば GPU は不要です。
+> ⭐⭐ **参加者自身に Genie Code で入れてもらう手もあります**（`08` にプロンプトを記載済み）。
+>
+> ```
+> https://github.com/databricks-industry-solutions/many-model-forecasting
+> の skills/ を私のワークスペースにインストールしてください。
+> Genie Code 用の手順（README の Option A）でお願いします。
+> ```
+>
+> ⚠️ 当日の時間を考えると**講師が事前に配置しておく**のが安全です。
+
+### ⭐ 確認方法
+
+Genie Code で `What skills do you have access to?` と聞き、
+Many-Model Forecasting と 5 つのサブスキルが挙がれば成功です。
+⚠️ 挙がらない場合はパスが 1 文字でも違うことを疑ってください（Genie Code はパスに厳格）。
+
+### ⭐ 実測で分かったこと
+
+| | 実測 |
+|---|---|
+| ⭐ 実行環境 | ⭐⭐ **サーバーレスで完走します**（クラスタ不要） |
+| ⭐ 所要時間 | ⭐ ジョブ本体 **約 6.5 分**（6 モデル × 29 系列 × 3 ウィンドウ） |
+| GPU | ⭐ **不要**（統計モデルと LightGBM は CPU のみ） |
+| ⚠️ 生成コードの不具合 | ⚠️ `sc.defaultParallelism` はサーバーレスで使えず失敗。⭐ **会話で直させれば通ります**（`08` に対処法を記載） |
+| ⚠️ `.assistant_instructions.md` | ⭐ 当方の検証では**無くても**スキルとゲートは機能しました（公式には必須） |
+
+⭐ MMF を最後まで通した結果を **`fc_sample` に `scm_*` として残しておく**と、
+当日は結果を見せるだけで済みます（⭐ `08` は**自分のスキーマ → 見本**の順に探します）。
+
+⚠️ MMF は Databricks の正式サポート対象外（AS-IS）です。
 
 ## STEP 6.5 — ⭐ 月次ジョブを一度動かしておく（任意）
 
